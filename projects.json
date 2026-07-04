@@ -1,0 +1,34 @@
+[
+  {
+    "title": "JobLens",
+    "flagship": true,
+    "description": "A full-stack job application platform I designed and built end-to-end. Python/FastAPI backend with a PostgreSQL database and a vanilla JavaScript frontend. Built deliberately without frameworks on the frontend so I understand and can defend every layer of the stack.",
+    "stack": ["Python", "FastAPI", "PostgreSQL", "JavaScript"],
+    "github": "https://github.com/Dah-vid/JobLens",
+    "demo": null
+  },
+  {
+    "title": "Streakser",
+    "flagship": false,
+    "description": "A habit streak-tracking iPhone app built with Expo and React Native. Supports per-habit scheduling, streak-freeze logic, haptic feedback, and offline persistence via AsyncStorage.",
+    "stack": ["React Native", "Expo", "TypeScript", "AsyncStorage"],
+    "github": "https://github.com/Dah-vid/streaks-star",
+    "demo": null
+  },
+  {
+    "title": "Speech-to-Text Benchmark",
+    "flagship": false,
+    "description": "A personal dictation tool and benchmarking harness comparing local (mlx-whisper) and API-based (GPT-4o-transcribe) speech-to-text models on accented English, measuring accuracy and latency trade-offs.",
+    "stack": ["Python", "mlx-whisper", "OpenAI API"],
+    "github": "pending",
+    "demo": null
+  },
+  {
+    "title": "NeighbourHeat",
+    "flagship": false,
+    "description": "Team hackathon project from the Edinburgh AI × Anthropic Hackathon (2026): a platform for analysing thermal drone imagery to identify residential heat loss. I served as DevOps/backend lead on a three-person team.",
+    "stack": ["Python", "DevOps"],
+    "github": "https://github.com/detunjiSamuel/Ai-expo-anthropic",
+    "demo": null
+  }
+]

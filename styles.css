@@ -1,0 +1,390 @@
+/* ---------- tokens ---------- */
+
+:root {
+  --carbon: #101214;
+  --graphite: #26292c;
+  --smoke: #878d93;
+  --paper: #eae7e1;
+
+  --font-display: "Archivo", "Arial Black", system-ui, sans-serif;
+  --font-body: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  --measure: 62ch;
+  --page-max: 1100px;
+  --page-pad: clamp(1.25rem, 4vw, 3rem);
+}
+
+@font-face {
+  font-family: "Archivo";
+  src: url("fonts/archivo-expanded-black.woff2") format("woff2");
+  font-weight: 900;
+  font-stretch: 125%;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ---------- base ---------- */
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+}
+
+html {
+  color-scheme: dark;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+body {
+  background: var(--carbon);
+  color: var(--paper);
+  font-family: var(--font-body);
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.site-header,
+main,
+.site-footer {
+  max-width: var(--page-max);
+  margin-inline: auto;
+  padding-inline: var(--page-pad);
+}
+
+a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.25em;
+}
+
+:focus-visible {
+  outline: 2px solid var(--paper);
+  outline-offset: 3px;
+}
+
+::selection {
+  background: var(--paper);
+  color: var(--carbon);
+}
+
+.display,
+.hero-name,
+.mark,
+.project-num,
+.project-title,
+.flag-tag,
+.footer-mail {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-stretch: 125%;
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+}
+
+/* outlined type — the signature. Falls back to solid smoke where
+   text-stroke is unsupported, so it never renders invisible. */
+.outline,
+.project-num,
+.flag-tag {
+  color: var(--smoke);
+}
+
+@supports (-webkit-text-stroke: 1px black) {
+  .outline,
+  .project-num,
+  .flag-tag {
+    color: transparent;
+    -webkit-text-stroke: 1.5px var(--paper);
+  }
+
+  .project-num,
+  .flag-tag {
+    -webkit-text-stroke: 1px var(--smoke);
+  }
+}
+
+.skip-link {
+  position: absolute;
+  left: var(--page-pad);
+  top: -4rem;
+  background: var(--paper);
+  color: var(--carbon);
+  padding: 0.5rem 1rem;
+  text-decoration: none;
+  z-index: 10;
+}
+
+.skip-link:focus {
+  top: 0.75rem;
+}
+
+/* ---------- header ---------- */
+
+.site-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding-block: 1.5rem;
+}
+
+.mark {
+  font-size: 1rem;
+  text-decoration: none;
+}
+
+.site-header nav {
+  display: flex;
+  gap: clamp(1rem, 3vw, 2.5rem);
+}
+
+.site-header nav a {
+  color: var(--smoke);
+  text-decoration: none;
+}
+
+.site-header nav a:hover {
+  color: var(--paper);
+  text-decoration: underline;
+  text-underline-offset: 0.25em;
+}
+
+/* ---------- hero ---------- */
+
+.hero {
+  padding-block: clamp(3rem, 10vh, 7rem) clamp(4rem, 10vh, 7rem);
+}
+
+.hero-name {
+  font-size: clamp(1.9rem, 9.5vw, 6.75rem);
+  line-height: 0.95;
+  overflow-wrap: anywhere;
+}
+
+.hero-name span {
+  display: block;
+}
+
+.hero-line {
+  margin-top: 1.5rem;
+  font-size: clamp(1.05rem, 2vw, 1.25rem);
+  color: var(--paper);
+  max-width: var(--measure);
+}
+
+.hero-bio {
+  margin-top: 0.75rem;
+  color: var(--smoke);
+  max-width: var(--measure);
+}
+
+.link-row {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+}
+
+.hero .link-row {
+  margin-top: 2rem;
+}
+
+/* ---------- projects ---------- */
+
+.section-label {
+  font-size: 0.8rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--smoke);
+  margin-bottom: 1rem;
+}
+
+.project-list {
+  list-style: none;
+  padding: 0;
+  counter-reset: none;
+  border-bottom: 1px solid var(--graphite);
+}
+
+.project {
+  border-top: 1px solid var(--graphite);
+  padding: 1.5rem 0.25rem;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: clamp(1rem, 3vw, 2rem);
+  align-items: start;
+}
+
+.project-num {
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  line-height: 1.1;
+}
+
+.project-title {
+  font-size: clamp(1.25rem, 3vw, 1.75rem);
+  line-height: 1.1;
+}
+
+.project-title a {
+  text-decoration: none;
+}
+
+.project-title a:hover {
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.15em;
+}
+
+.flag-tag {
+  font-size: 0.65em;
+  vertical-align: 0.2em;
+  margin-left: 0.5em;
+  letter-spacing: 0.05em;
+}
+
+.project-desc {
+  margin-top: 0.5rem;
+  color: var(--smoke);
+  max-width: var(--measure);
+}
+
+.project-meta {
+  margin-top: 0.5rem;
+  color: var(--smoke);
+  font-size: 0.9rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+}
+
+.project-arrow {
+  font-size: 1.5rem;
+  line-height: 1.1;
+  color: var(--smoke);
+}
+
+/* flagship: same row system, louder hierarchy */
+.project.flagship {
+  padding-block: 2.25rem;
+}
+
+.project.flagship .project-num {
+  font-size: clamp(2rem, 5vw, 3rem);
+}
+
+.project.flagship .project-title {
+  font-size: clamp(1.75rem, 5.5vw, 3rem);
+}
+
+/* the one effect: row inversion on hover / keyboard focus */
+.project:hover,
+.project:focus-within {
+  background: var(--paper);
+  color: var(--carbon);
+  border-top-color: var(--paper);
+}
+
+.project:hover .project-desc,
+.project:hover .project-meta,
+.project:focus-within .project-desc,
+.project:focus-within .project-meta {
+  color: #4a4e52;
+}
+
+.project:hover .project-arrow,
+.project:focus-within .project-arrow {
+  color: var(--carbon);
+  transform: translateX(0.35rem);
+}
+
+.project:focus-within :focus-visible {
+  outline-color: var(--carbon);
+}
+
+@supports (-webkit-text-stroke: 1px black) {
+  .project:hover .project-num,
+  .project:hover .flag-tag,
+  .project:focus-within .project-num,
+  .project:focus-within .flag-tag {
+    -webkit-text-stroke-color: var(--carbon);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .project,
+  .project .project-desc,
+  .project .project-meta,
+  .project .project-arrow {
+    transition: background-color 150ms ease-out, color 150ms ease-out,
+      transform 150ms ease-out;
+  }
+}
+
+.noscript-note {
+  border-top: 1px solid var(--graphite);
+  padding-top: 1.5rem;
+  color: var(--smoke);
+}
+
+/* ---------- about / footer ---------- */
+
+.projects-section,
+.about-section {
+  padding-block: clamp(2.5rem, 8vh, 5rem);
+}
+
+.about-text {
+  max-width: var(--measure);
+  color: var(--smoke);
+}
+
+.site-footer {
+  padding-block: clamp(2.5rem, 8vh, 5rem) 2rem;
+}
+
+.footer-mail {
+  display: inline-block;
+  font-size: clamp(1.1rem, 4vw, 2.5rem);
+  line-height: 1.15;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.footer-mail:hover .outline {
+  color: var(--paper);
+  -webkit-text-stroke-color: var(--paper);
+}
+
+.footer-row {
+  margin-top: 3rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 1rem;
+  color: var(--smoke);
+  font-size: 0.9rem;
+}
+
+/* ---------- small screens ---------- */
+
+@media (max-width: 600px) {
+  .project {
+    grid-template-columns: 1fr auto;
+  }
+
+  .project-num {
+    grid-column: 1 / -1;
+    font-size: 1.25rem;
+  }
+
+  .project.flagship .project-num {
+    font-size: 1.5rem;
+  }
+}
