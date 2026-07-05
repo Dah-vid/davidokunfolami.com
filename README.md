@@ -9,6 +9,7 @@ index.html      page markup
 styles.css      all styling (design tokens at the top)
 main.js         renders the project list from projects.json
 projects.json   the only file you edit to change projects
+blog/           the blog (see "Writing a blog post" below)
 fonts/          self-hosted Archivo Expanded Black (headings)
 David-Okunfolami-CV.pdf   linked from the CV section
 favicon.svg
@@ -48,6 +49,41 @@ Field notes:
 - `demo` — full URL of the live/hosted version, or `null` to omit it. When set, the row shows a "Live ↗" link next to "Code ↗".
 - Project titles currently link to the code. When your projects are hosted, open `main.js` and change `TITLE_LINKS_TO = "code"` to `"live"` (first line of the file) — titles will then prefer the live URL, falling back to the repo for projects without one.
 - Projects render in file order (flagship first regardless of position).
+
+## Writing a blog post
+
+The blog works like the project list — data files plus a small renderer, no
+build step:
+
+```
+blog/index.html   post list page (davidokunfolami.com/blog/)
+blog/post.html    single-post page (post.html?p=slug)
+blog/blog.js      renders both pages + a small Markdown renderer
+blog/posts.json   the post index — one entry per post
+blog/posts/       one Markdown file per post
+```
+
+To publish a post:
+
+1. Write `blog/posts/my-post-slug.md` in Markdown.
+2. Add an entry to `blog/posts.json`:
+
+```json
+{
+  "slug": "my-post-slug",
+  "title": "My Post Title",
+  "date": "2026-07-05",
+  "summary": "One or two sentences shown on the post list."
+}
+```
+
+3. Push. The list sorts by `date` (newest first), and `slug` must match the
+   Markdown filename.
+
+Markdown support (kept deliberately small): `#`–`####` headings, paragraphs,
+`-` and `1.` lists, `> quotes`, fenced and inline code, `**bold**`,
+`*italic*`, `[links](…)`, images, and `---` rules. If you need more, extend
+`renderMarkdown` in `blog/blog.js`.
 
 ## Deployment
 
