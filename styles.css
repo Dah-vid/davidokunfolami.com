@@ -79,7 +79,8 @@ a {
 .project-num,
 .project-title,
 .flag-tag,
-.footer-mail {
+.footer-mail,
+.cv-link {
   font-family: var(--font-display);
   font-weight: 900;
   font-stretch: 125%;
@@ -263,6 +264,15 @@ a {
   gap: 0.5rem 1.5rem;
 }
 
+.project-meta a {
+  color: var(--paper);
+}
+
+.project:hover .project-meta a,
+.project:focus-within .project-meta a {
+  color: var(--carbon);
+}
+
 .project-arrow {
   font-size: 1.5rem;
   line-height: 1.1;
@@ -335,8 +345,27 @@ a {
 /* ---------- about / footer ---------- */
 
 .projects-section,
-.about-section {
+.about-section,
+.cv-section {
   padding-block: clamp(2.5rem, 8vh, 5rem);
+}
+
+.cv-link {
+  display: inline-block;
+  font-size: clamp(1.5rem, 5vw, 3rem);
+  line-height: 1.15;
+  text-decoration: none;
+}
+
+.cv-link:hover .outline {
+  color: var(--paper);
+  -webkit-text-stroke-color: var(--paper);
+}
+
+.cv-note {
+  margin-top: 0.75rem;
+  color: var(--smoke);
+  font-size: 0.9rem;
 }
 
 .about-text {

@@ -10,6 +10,7 @@ styles.css      all styling (design tokens at the top)
 main.js         renders the project list from projects.json
 projects.json   the only file you edit to change projects
 fonts/          self-hosted Archivo Expanded Black (headings)
+David-Okunfolami-CV.pdf   linked from the CV section
 favicon.svg
 CNAME           custom domain for GitHub Pages
 .nojekyll       tells GitHub Pages to skip Jekyll
@@ -44,7 +45,7 @@ Field notes:
 
 - `flagship: true` promotes the project to the top with the large treatment. Use it on one project at a time.
 - `github` — full URL. If the repo is private or not ready, set it to `null` (or any non-URL like `"pending"`) and the title renders without a link.
-- `demo` — full URL for a live demo link, or `null` to omit it.
+- `demo` — full URL of the live/hosted version, or `null` to omit it. When set, the project title links to the live site and the row shows both "Live ↗" and "Code ↗" links.
 - Projects render in file order (flagship first regardless of position).
 
 ## Deployment

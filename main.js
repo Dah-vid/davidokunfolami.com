@@ -42,9 +42,14 @@
 
     const title = document.createElement("h3");
     title.className = "project-title";
-    if (isUrl(project.github)) {
+    const primaryUrl = isUrl(project.demo)
+      ? project.demo
+      : isUrl(project.github)
+        ? project.github
+        : null;
+    if (primaryUrl) {
       const link = document.createElement("a");
-      link.href = project.github;
+      link.href = primaryUrl;
       link.textContent = project.title;
       title.append(link);
     } else {
@@ -69,8 +74,14 @@
     if (isUrl(project.demo)) {
       const demo = document.createElement("a");
       demo.href = project.demo;
-      demo.textContent = "Live demo";
+      demo.textContent = "Live ↗";
       meta.append(demo);
+    }
+    if (isUrl(project.github)) {
+      const code = document.createElement("a");
+      code.href = project.github;
+      code.textContent = "Code ↗";
+      meta.append(code);
     }
 
     body.append(title, desc, meta);
