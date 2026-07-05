@@ -288,6 +288,7 @@ a {
   font-size: 1.5rem;
   line-height: 1.1;
   color: var(--smoke);
+  pointer-events: none;
 }
 
 /* flagship: same row system, louder hierarchy */
