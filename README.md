@@ -45,7 +45,8 @@ Field notes:
 
 - `flagship: true` promotes the project to the top with the large treatment. Use it on one project at a time.
 - `github` — full URL. If the repo is private or not ready, set it to `null` (or any non-URL like `"pending"`) and the title renders without a link.
-- `demo` — full URL of the live/hosted version, or `null` to omit it. When set, the project title links to the live site and the row shows both "Live ↗" and "Code ↗" links.
+- `demo` — full URL of the live/hosted version, or `null` to omit it. When set, the row shows a "Live ↗" link next to "Code ↗".
+- Project titles currently link to the code. When your projects are hosted, open `main.js` and change `TITLE_LINKS_TO = "code"` to `"live"` (first line of the file) — titles will then prefer the live URL, falling back to the repo for projects without one.
 - Projects render in file order (flagship first regardless of position).
 
 ## Deployment

@@ -1,3 +1,7 @@
+// Where a project's title links: "code" or "live".
+// "live" prefers the demo URL when one exists, falling back to the repo.
+const TITLE_LINKS_TO = "code";
+
 (async function renderProjects() {
   const list = document.getElementById("project-list");
   const count = document.getElementById("project-count");
@@ -42,11 +46,10 @@
 
     const title = document.createElement("h3");
     title.className = "project-title";
-    const primaryUrl = isUrl(project.demo)
-      ? project.demo
-      : isUrl(project.github)
-        ? project.github
-        : null;
+    const codeUrl = isUrl(project.github) ? project.github : null;
+    const liveUrl = isUrl(project.demo) ? project.demo : null;
+    const primaryUrl =
+      TITLE_LINKS_TO === "live" ? liveUrl || codeUrl : codeUrl || liveUrl;
     if (primaryUrl) {
       const link = document.createElement("a");
       link.href = primaryUrl;
