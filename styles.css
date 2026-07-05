@@ -214,12 +214,21 @@ a {
 }
 
 .project {
+  position: relative;
   border-top: 1px solid var(--graphite);
   padding: 1.5rem 0.25rem;
   display: grid;
   grid-template-columns: auto 1fr auto;
   gap: clamp(1rem, 3vw, 2rem);
   align-items: start;
+}
+
+/* stretch the title link over the whole row, so the row (and its
+   arrow) is one big click target; meta links sit above it */
+.project-title a::after {
+  content: "";
+  position: absolute;
+  inset: 0;
 }
 
 .project-num {
@@ -266,6 +275,8 @@ a {
 
 .project-meta a {
   color: var(--paper);
+  position: relative;
+  z-index: 1;
 }
 
 .project:hover .project-meta a,
