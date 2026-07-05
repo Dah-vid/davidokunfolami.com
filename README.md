@@ -2,6 +2,8 @@
 
 Personal portfolio. Plain HTML, CSS, and vanilla JavaScript — no frameworks, no build step. Project cards are rendered from a single data file.
 
+**Making changes? See [MAINTAINING.md](MAINTAINING.md)** — recipes for adding projects, writing blog posts, updating the CV, changing colors, and fixing common deploy issues.
+
 ## Structure
 
 ```
