@@ -5,13 +5,10 @@
     "date": "2026-07-05",
     "summary": "This site has a blog now. Same rules as everything else here: plain Markdown files, no frameworks, no build step."
   },
-
-
-{
-  "slug": "finally-i-have-a-personal-website",
-  "title": "Finally I have a personally Website",
-  "date": "2026-07-09",
-  "summary": "Introducing David Okunfolami.com"
-}
-
+  {
+    "slug": "finally-i-have-a-personal-website",
+    "title": "Finally, I have a personal website",
+    "date": "2026-07-09",
+    "summary": "Notes on shipping davidokunfolami.com — and what's on it."
+  }
 ]
