@@ -4,8 +4,7 @@
     "title": "Hello, world",
     "date": "2026-07-05",
     "summary": "This site has a blog now. Same rules as everything else here: plain Markdown files, no frameworks, no build step."
-  }
-]
+  },
 
 
 {
@@ -14,3 +13,5 @@
   "date": "2026-07-09",
   "summary": "Introducing David Okunfolami.com"
 }
+
+]
