@@ -173,7 +173,9 @@ async function renderList(list) {
     const num = document.createElement("span");
     num.className = "project-num";
     num.setAttribute("aria-hidden", "true");
-    num.textContent = String(i + 1).padStart(2, "0");
+    // Chronological: the oldest post is 01, numbers count up from there,
+    // even though the list displays newest first.
+    num.textContent = String(posts.length - i).padStart(2, "0");
 
     const body = document.createElement("div");
     body.className = "project-body";
