@@ -16,4 +16,4 @@ The projects list and this blog are both driven by small data files
 (`projects.json` and `blog/posts.json`), so adding new work later is mostly
 just editing a file and pushing.
 
-More soon, on whatever I'm building next.
+More soon, on whatever I'm building next or whatever thoughts I'm pondering
