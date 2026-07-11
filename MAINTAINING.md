@@ -119,7 +119,9 @@ it inherits the styling.
 
 - **"My change isn't showing"** — GitHub Pages tells browsers to cache
   files for 10 minutes. Hard refresh (Cmd+Shift+R) or check in incognito
-  before assuming it's broken.
+  before assuming it's broken. New posts and project edits are exempt —
+  those data files revalidate on every load — so this mainly bites
+  HTML/CSS/JS changes.
 - **Push deployed but site never updates** — check the build:
   `gh api repos/Dah-vid/davidokunfolami.com/pages/builds/latest --jq .status`.
   If it says `building` for more than ~2 minutes it's stuck (happened
