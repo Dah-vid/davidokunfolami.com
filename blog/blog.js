@@ -26,7 +26,8 @@ function loadError(target, message) {
 }
 
 async function fetchPosts() {
-  const res = await fetch("posts.json");
+  // no-cache = always revalidate, so a new post shows on plain refresh
+  const res = await fetch("posts.json", { cache: "no-cache" });
   if (!res.ok) throw new Error(res.status);
   const posts = await res.json();
   return posts.sort((a, b) => (a.date < b.date ? 1 : -1));
@@ -239,7 +240,7 @@ async function renderPost(bodyEl) {
   dateEl.textContent = formatDate(post.date);
 
   try {
-    const res = await fetch("posts/" + post.slug + ".md");
+    const res = await fetch("posts/" + post.slug + ".md", { cache: "no-cache" });
     if (!res.ok) throw new Error(res.status);
     bodyEl.innerHTML = renderMarkdown(await res.text());
   } catch (err) {

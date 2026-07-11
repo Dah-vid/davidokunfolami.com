@@ -11,7 +11,8 @@ const TITLE_LINKS_TO = "code";
 
   let projects;
   try {
-    const res = await fetch("projects.json");
+    // no-cache = always revalidate, so edits show on plain refresh
+    const res = await fetch("projects.json", { cache: "no-cache" });
     if (!res.ok) throw new Error(res.status);
     projects = await res.json();
   } catch (err) {
