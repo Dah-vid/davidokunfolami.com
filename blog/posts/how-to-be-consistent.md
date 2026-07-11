@@ -6,4 +6,4 @@ There's a lot of them, walk with me. Take a look at your life, there are things 
 
 I will continue this later, I dont know if anyone is reading this but yeah. This is part 1 of a series.
 
-See you soon
+See you soon folks
