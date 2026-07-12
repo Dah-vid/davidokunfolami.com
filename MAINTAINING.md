@@ -88,6 +88,19 @@ paragraph, and footer email are in `index.html` — edit the text in place.
 If you ever change your email, it appears three times in `index.html`
 (hero link, footer display link, footer link row).
 
+## Add or change a social link (GitHub / LinkedIn / Twitter / …)
+
+Contact links are deliberately plain HTML (they must work without
+JavaScript), so they're duplicated in **four places across three files** —
+edit all of them or the site goes inconsistent:
+
+- `index.html` — hero link row *and* footer link row
+- `blog/index.html` — footer link row
+- `blog/post.html` — footer link row
+
+Quick check that all four match:
+`grep -c 'x.com/thatboycodes' index.html blog/index.html blog/post.html`
+
 ## Change colors or fonts
 
 All design tokens are the first thing in `styles.css`:
