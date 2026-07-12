@@ -213,6 +213,31 @@ async function renderList(list) {
 
 /* ---------- post page ---------- */
 
+// Comments are GitHub Discussions, embedded via giscus (giscus.app).
+// Each post maps to a discussion by its slug, so renaming post.html or
+// changing URLs later won't orphan any comment threads.
+function loadComments(slug) {
+  const container = document.getElementById("comments");
+  if (!container) return;
+  const s = document.createElement("script");
+  s.src = "https://giscus.app/client.js";
+  s.setAttribute("data-repo", "Dah-vid/davidokunfolami.com");
+  s.setAttribute("data-repo-id", "R_kgDOTN0ofQ");
+  s.setAttribute("data-category", "Announcements");
+  s.setAttribute("data-category-id", "DIC_kwDOTN0ofc4DBBYZ");
+  s.setAttribute("data-mapping", "specific");
+  s.setAttribute("data-term", "blog/" + slug);
+  s.setAttribute("data-strict", "1");
+  s.setAttribute("data-reactions-enabled", "1");
+  s.setAttribute("data-emit-metadata", "0");
+  s.setAttribute("data-input-position", "top");
+  s.setAttribute("data-theme", "transparent_dark");
+  s.setAttribute("data-lang", "en");
+  s.crossOrigin = "anonymous";
+  s.async = true;
+  container.append(s);
+}
+
 async function renderPost(bodyEl) {
   const titleEl = document.getElementById("post-title");
   const dateEl = document.getElementById("post-date");
@@ -226,12 +251,14 @@ async function renderPost(bodyEl) {
     post = posts.find((p) => p.slug === slug);
   } catch (err) {
     loadError(bodyEl, "Couldn't load this post.");
+    document.querySelector(".comments-section")?.remove();
     return;
   }
 
   if (!post) {
     titleEl.textContent = "Post not found";
     loadError(bodyEl, "No post lives at this address.");
+    document.querySelector(".comments-section")?.remove();
     return;
   }
 
@@ -243,8 +270,10 @@ async function renderPost(bodyEl) {
     const res = await fetch("posts/" + post.slug + ".md", { cache: "no-cache" });
     if (!res.ok) throw new Error(res.status);
     bodyEl.innerHTML = renderMarkdown(await res.text());
+    loadComments(post.slug);
   } catch (err) {
     loadError(bodyEl, "Couldn't load this post.");
+    document.querySelector(".comments-section")?.remove();
   }
 }
 

@@ -469,6 +469,12 @@ a {
   max-width: var(--measure);
 }
 
+.comments-section {
+  border-top: 1px solid var(--graphite);
+  padding-block: clamp(2rem, 6vh, 3.5rem);
+  max-width: var(--measure);
+}
+
 .post-body p,
 .post-body ul,
 .post-body ol,
