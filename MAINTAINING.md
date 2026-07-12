@@ -106,6 +106,19 @@ font is one self-hosted file (`fonts/archivo-expanded-black.woff2`) wired
 up in the `@font-face` block just below the tokens; body text is the
 system font stack (no file to manage).
 
+## Comments
+
+Post comments are GitHub Discussions, embedded via [giscus](https://giscus.app).
+Each post's thread is a discussion in the repo's **Announcements** category,
+titled `blog/<slug>` — created automatically the first time someone comments.
+
+- **Moderate / delete comments**: repo → Discussions on GitHub.
+- **Turn comments off entirely**: remove the `loadComments(post.slug)` call
+  in `blog/blog.js`.
+- Commenters need a GitHub account; reactions (👍 etc.) work too.
+- The giscus IDs (`data-repo-id`, `data-category-id`) in `blog.js` are tied
+  to this repo — regenerate at giscus.app if the repo is ever recreated.
+
 ## Add a new section to the homepage
 
 Copy an existing `<section>` block in `index.html` (the CV one is the
