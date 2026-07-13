@@ -191,7 +191,25 @@ a {
   padding: 0;
   display: flex;
   flex-wrap: wrap;
-  gap: 1.5rem;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.link-row a {
+  display: inline-flex;
+  color: var(--smoke);
+  text-decoration: none;
+}
+
+.link-row a:hover,
+.link-row a:focus-visible {
+  color: var(--paper);
+}
+
+.social-icon {
+  width: 20px;
+  height: 20px;
+  display: block;
 }
 
 .hero .link-row {
