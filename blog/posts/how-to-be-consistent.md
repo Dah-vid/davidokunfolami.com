@@ -9,6 +9,3 @@ Take a look at your life, there are things you already do without trying, its ju
 You eat, you sleep , you drink water, you brush your teeth. You are consistent with these things, yes they are tasks that are needed for life but the backbone is you are consistent with them, and most of the timnes they have a trigger. You get hungry, you eat , You get tired at night, or you see its night time, you sleep. They all have triggers, thats what I noticed, I looked into my life and realized I was capable of consistency, but how?
 
 I will continue this later, I dont know if anyone is reading this but yeah. This is part 1 of a series of four.
-
-See you soon folks. Toodles. Bye Bye. Sayonara
-ABcdef
