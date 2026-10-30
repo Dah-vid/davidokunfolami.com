@@ -91,15 +91,35 @@ If you ever change your email, it appears three times in `index.html`
 ## Add or change a social link (GitHub / LinkedIn / Twitter / …)
 
 Contact links are deliberately plain HTML (they must work without
-JavaScript), so they're duplicated in **four places across three files** —
+JavaScript), so they're duplicated in **five places across four files** —
 edit all of them or the site goes inconsistent:
 
 - `index.html` — hero link row *and* footer link row
 - `blog/index.html` — footer link row
 - `blog/post.html` — footer link row
+- `focus/index.html` — footer link row
 
-Quick check that all four match:
-`grep -c 'x.com/thatboycodes' index.html blog/index.html blog/post.html`
+Quick check that all five match:
+`grep -c 'x.com/thatboycodes' index.html blog/index.html blog/post.html focus/index.html`
+
+The header nav is duplicated the same way (all four files) — add a new
+page's link to each.
+
+## Focus Desk (`focus/`)
+
+A self-contained app in one file, `focus/index.html`: its CSS and
+JavaScript are inline, and it borrows only the site header, footer, fonts
+and colour tokens from `/styles.css`.
+
+- **Data** lives in each visitor's own browser (localStorage keys starting
+  `focusdesk:`). There's no server, so nothing to back up, and you can't
+  see anyone's data.
+- **Colours**: the token block at the top of its `<style>` maps the app's
+  names (`--ink`, `--phase`, …) onto the site palette. The break state
+  inverts the timer panel; that's the `body[data-phase="break"] .deck`
+  rule.
+- **Copy** (break ideas, if-then defaults, desk-setup tips) is in plain
+  arrays near the top of the script: `BREAKS`, `DEFAULT_RULES`, `SETUP`.
 
 ## Change colors or fonts
 

@@ -131,8 +131,10 @@ a {
 
 .site-header {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: baseline;
+  gap: 0.75rem 1.5rem;
   padding-block: 1.5rem;
 }
 
@@ -143,7 +145,20 @@ a {
 
 .site-header nav {
   display: flex;
-  gap: clamp(1rem, 3vw, 2.5rem);
+  flex-wrap: wrap;
+  gap: 0.5rem clamp(1rem, 3vw, 2.5rem);
+}
+
+.site-header nav a[aria-current="page"] {
+  color: var(--paper);
+}
+
+/* six links fit one row on a 360px phone */
+@media (max-width: 420px) {
+  .site-header nav {
+    font-size: 0.9rem;
+    column-gap: 0.9rem;
+  }
 }
 
 .site-header nav a {

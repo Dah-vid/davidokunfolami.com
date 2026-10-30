@@ -8,6 +8,14 @@
     "demo": null
   },
   {
+    "title": "Focus Desk",
+    "flagship": false,
+    "description": "A focus timer and distraction journal for study sessions. Timed blocks, a log that tags why each urge to switch happened, if-then plans shown while you work, and a seven-day view of where your focus went. It saves in your own browser, with no account or server.",
+    "stack": ["JavaScript", "Web Audio API", "Picture-in-Picture"],
+    "github": "https://github.com/Dah-vid/davidokunfolami.com/tree/main/focus",
+    "demo": "https://davidokunfolami.com/focus/"
+  },
+  {
     "title": "Streakser",
     "flagship": false,
     "description": "A habit streak-tracking iPhone app built with Expo and React Native. Supports per-habit scheduling, streak-freeze logic, haptic feedback, and offline persistence via AsyncStorage.",

@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Focus Desk — David Okunfolami</title>
+<meta name="description" content="Focus Desk: a focus timer and distraction journal for study sessions. Timed blocks, if-then plans, and a seven-day view of where your focus went. Saves in your own browser.">
+<meta property="og:title" content="Focus Desk — David Okunfolami">
+<meta property="og:description" content="A focus timer and distraction journal for study sessions. Saves in your own browser, no account needed.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://davidokunfolami.com/focus/">
+<meta name="twitter:card" content="summary">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="preload" href="/fonts/archivo-expanded-black.woff2" as="font" type="font/woff2" crossorigin>
+<!-- absolute paths: the pop-out timer window copies these stylesheets -->
+<link rel="stylesheet" href="/styles.css">
+<style>
+/* Layout: one study console. Left = the block (timer) + distraction journal; right = if-then rules, the week, desk setup. Collapses to one column in a narrow window.
+   Colours come from the site tokens in /styles.css. The site is monochrome, so phase is shown by
+   inversion rather than hue: focus = paper on carbon, break = the timer panel flips to carbon on paper. */
+:root{
+  --bg:var(--carbon); --panel:#17191c; --raised:var(--carbon); --ink:var(--paper); --muted:var(--smoke); --line:var(--graphite);
+  --focus:var(--paper); --focus-soft:var(--graphite); --break:var(--paper); --break-soft:var(--graphite);
+  --ok:var(--paper); --danger:var(--paper); --amber:var(--paper);
+  --phase:var(--smoke); --phase-soft:var(--graphite);
+  --display:var(--font-display);
+  --body:var(--font-body);
+  --mono:var(--font-body);
+}
+body[data-phase="focus"],body[data-phase="wrap"],body[data-phase="break"]{--phase:var(--paper)}
+body[data-phase="break"] .deck{
+  --bg:var(--paper); --panel:#dedad3; --raised:var(--paper); --ink:var(--carbon); --muted:#4a4e52; --line:#c4c0b9;
+  --phase:var(--carbon); --phase-soft:#cfcbc4; --ok:var(--carbon); --danger:var(--carbon);
+}
+
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.5;margin:0}
+/* Floating mini timer (Document Picture-in-Picture window) */
+.mini{display:flex;flex-direction:column;gap:8px;padding:10px 12px;min-height:100vh;border-top:4px solid var(--phase);box-sizing:border-box}
+.mini-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.mini .clock{font-size:44px}
+.mini-goal{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mini form{display:flex;gap:6px}
+.mini .field{padding:6px 8px;font-size:13px}
+.mini .alarm{padding:6px 10px}
+.mini .alarm strong{font-size:14px;min-width:0}
+.pip-note{font-size:13px;color:var(--muted);grid-column:1/-1}
+*{box-sizing:border-box}
+button,input,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--phase);outline-offset:2px}
+h1,h2,h3{font-family:var(--display);font-weight:900;font-stretch:125%;text-transform:uppercase;margin:0;text-wrap:balance;letter-spacing:.01em}
+p{margin:0}
+
+.app{padding-block:clamp(1rem,4vh,2.5rem) 48px;display:flex;flex-direction:column;gap:16px}
+.top{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.brand{font-size:clamp(1.6rem,5vw,2.5rem);line-height:1;margin-right:8px}
+.top .spacer{flex:1}
+.chip-status{font-size:12px;color:var(--muted);border:1px solid var(--line);padding:3px 10px}
+.keys{font-size:12px;color:var(--muted)}
+kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-bottom-width:2px;padding:0 5px;background:var(--raised)}
+
+.grid{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;align-items:start}
+.col{display:flex;flex-direction:column;gap:16px;min-width:0}
+@media (min-width:860px){.grid{grid-template-columns:minmax(0,1.15fr) minmax(0,1fr)}}
+
+.btn{border:1px solid var(--line);background:var(--raised);padding:8px 14px;cursor:pointer;font-weight:700}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--phase);border-color:var(--phase);color:var(--bg)}
+body[data-phase="idle"] .btn.primary{background:var(--ink);border-color:var(--ink)}
+.btn.quiet{background:transparent;border-color:transparent;color:var(--muted);font-weight:400;text-decoration:underline;text-underline-offset:3px}
+.btn.small{padding:4px 10px;font-size:13px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+
+/* The block: the one framed object on the page */
+/* No colour transition: the break flip is instant, so text never sits on a half-faded background. */
+.deck{background:var(--raised);color:var(--ink);border:1px solid var(--line);border-top:4px solid var(--phase);padding:18px 20px 20px;display:flex;flex-direction:column;gap:14px}
+.deck-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}
+.phase-label{font-family:var(--mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--phase);font-weight:600}
+body[data-phase="idle"] .phase-label{color:var(--muted)}
+.block-count{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+label.lbl{font-weight:700;display:block;margin-bottom:6px}
+.field{width:100%;border:1px solid var(--line);background:var(--panel);padding:10px 12px}
+textarea.field{min-height:72px;resize:vertical}
+.why{font-size:13px;color:var(--muted);max-width:62ch}
+.why b{color:var(--ink);font-weight:700}
+
+.resume{background:var(--phase-soft);padding:10px 12px;display:flex;flex-direction:column;gap:4px}
+.resume p{white-space:pre-wrap}
+.checks{display:flex;flex-wrap:wrap;gap:8px}
+.tog{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);padding:5px 12px;background:var(--panel);cursor:pointer;font-size:13px;user-select:none}
+.tog[aria-pressed="true"]{border-color:var(--ok);color:var(--ok);background:transparent}
+.tog[aria-pressed="true"]::before{content:"✓";font-weight:700}
+details.dump summary{cursor:pointer;color:var(--muted);font-size:14px}
+details.dump[open] summary{margin-bottom:8px}
+details.dump .field{margin-bottom:6px}
+.stepper{display:inline-flex;align-items:center;border:1px solid var(--line);overflow:hidden}
+.stepper button{border:0;background:var(--panel);width:34px;height:36px;cursor:pointer;font-weight:700;font-size:16px}
+.stepper span{font-family:var(--mono);min-width:72px;text-align:center;font-size:14px;font-variant-numeric:tabular-nums}
+.nudge{border:1px dashed var(--ok);padding:10px 12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.nudge p{flex:1;min-width:200px}
+
+.goal-now{font-weight:600;font-size:clamp(18px,2.4vw,22px);line-height:1.3;overflow-wrap:anywhere}
+.goal-now.empty{color:var(--muted)}
+.clock{font-family:var(--display);font-weight:900;font-stretch:125%;font-size:clamp(52px,12vw,104px);line-height:1;font-variant-numeric:tabular-nums;color:var(--phase)}
+/* paused = hollow digits, the site's outline-type signature */
+.paused .clock{opacity:.45}
+@supports (-webkit-text-stroke:1px black){.paused .clock{opacity:1;color:transparent;-webkit-text-stroke:1.5px var(--phase)}}
+.ticks{display:flex;gap:3px;height:14px}
+.ticks i{flex:1;background:var(--phase-soft)}
+.ticks i.on{background:var(--phase)}
+.ticks i.now{background:var(--phase);opacity:.45}
+@media (prefers-reduced-motion:no-preference){.ticks i.now{animation:pulse 2s ease-in-out infinite}}
+@keyframes pulse{50%{opacity:.15}}
+.ticks-scale{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:-8px;font-variant-numeric:tabular-nums}
+.mini-rules{border-top:1px solid var(--line);padding-top:12px;display:flex;flex-direction:column;gap:6px;font-size:14px}
+.break-idea{background:var(--phase-soft);padding:12px 14px;display:flex;flex-direction:column;gap:6px}
+.break-idea strong{font-size:18px}
+.parked{display:flex;flex-direction:column;gap:6px}
+
+/* Plain sections */
+.sec{border-top:1px solid var(--line);padding-top:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.sec-h{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.sec-h h2{font-size:18px}
+.count{font-family:var(--mono);font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+
+.capture{display:flex;gap:8px}
+.capture .field{flex:1;min-width:0}
+.tags{display:flex;flex-wrap:wrap;gap:6px}
+.tag{border:1px solid var(--line);background:var(--raised);padding:3px 10px;font-size:13px;cursor:pointer}
+.tag[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.hint{font-size:14px;border-left:3px solid var(--phase);padding:4px 10px;background:var(--raised);}
+.tabs{display:inline-flex;border:1px solid var(--line);overflow:hidden}
+.tabs button{border:0;background:transparent;padding:4px 12px;font-size:13px;cursor:pointer;color:var(--muted)}
+.tabs button[aria-selected="true"]{background:var(--raised);color:var(--ink);font-weight:700}
+.jlist{display:flex;flex-direction:column;gap:2px;max-height:420px;overflow-y:auto;margin:0 -6px;padding:0 6px}
+.day{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);padding:10px 0 4px}
+.entry{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;gap:10px;align-items:start;padding:7px 0;border-bottom:1px solid var(--line)}
+.entry input{margin-top:4px;accent-color:var(--ok);width:16px;height:16px}
+.entry .txt{overflow-wrap:anywhere}
+.entry.done .txt{color:var(--muted);text-decoration:line-through}
+.entry .meta{display:flex;flex-direction:column;align-items:flex-end;gap:2px}
+.pill{font-size:11px;padding:1px 8px;border:1px solid var(--line);white-space:nowrap;color:var(--muted)}
+.pill.bored{border-color:var(--amber);color:var(--amber)}
+.pill.effort{border-color:var(--focus);color:var(--focus)}
+.alarm{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--phase);color:var(--bg);padding:10px 14px}
+.alarm strong{flex:1;min-width:180px;font-size:18px}
+.alarm .btn{background:var(--bg);color:var(--ink);border-color:var(--bg)}
+@media (prefers-reduced-motion:no-preference){.ringing .alarm{animation:ring 1s ease-in-out infinite}}
+@keyframes ring{50%{opacity:.75}}
+.reps{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.reps b{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.rep-msg{font-size:14px;color:var(--ink);border-left:3px solid var(--ok);padding:4px 10px;background:var(--panel);}
+.settings select{padding:6px 10px}
+.pill.stuck{border-color:var(--danger);color:var(--danger)}
+.pill.task{border-color:var(--break);color:var(--break)}
+.time{font-family:var(--mono);font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.x{border:0;background:transparent;color:var(--muted);cursor:pointer;font-size:16px;line-height:1;padding:2px 4px;}
+.x:hover{color:var(--danger)}
+.empty-state{color:var(--muted);font-size:14px;padding:6px 0}
+
+.rules{display:flex;flex-direction:column;gap:8px;margin:0;padding:0;list-style:none}
+.rule{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;border-bottom:1px solid var(--line);padding:9px 0}
+.rule p{overflow-wrap:anywhere}
+.rule .kw{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--phase);font-weight:600}
+body[data-phase="idle"] .rule .kw{color:var(--muted)}
+.rule-form{display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 8px;align-items:center}
+.rule-form span{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.rule-form .btn{grid-column:2;justify-self:start}
+
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+@media (max-width:520px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.stat{display:flex;flex-direction:column;gap:2px}
+.stat b{font-family:var(--mono);font-size:20px;font-weight:600;font-variant-numeric:tabular-nums}
+.stat span{font-size:12px;color:var(--muted)}
+.bars{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;align-items:end;height:130px;padding-top:4px;border-bottom:1px solid var(--line)}
+.bar{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;gap:3px}
+.bar .v{font-family:var(--mono);font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.bar .col-fill{width:100%;max-width:34px;background:var(--focus);min-height:2px}
+.bar.zero .col-fill{background:var(--line)}
+.bar.today .v{color:var(--ink);font-weight:600}
+.bar-days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;margin-top:-6px}
+.bar-days span{text-align:center;font-family:var(--mono);font-size:11px;color:var(--muted)}
+.bar-days span small{display:block;font-size:10px}
+.legend{font-size:12px;color:var(--muted)}
+
+.setup{display:flex;flex-direction:column;gap:2px;margin:0;padding:0;list-style:none}
+.setup li{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;padding:8px 0;border-bottom:1px solid var(--line)}
+.setup li:last-child{border-bottom:0}
+.setup input{margin-top:4px;accent-color:var(--ok);width:16px;height:16px}
+.setup .t{font-weight:700}
+.setup li.done .t{color:var(--muted);text-decoration:line-through}
+
+.settings{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;background:var(--panel);border:1px solid var(--line);padding:14px 16px}
+.settings label{font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:4px}
+.settings .field{padding:6px 10px;font-family:var(--mono)}
+.settings .inline{flex-direction:row;align-items:center;gap:8px;color:var(--ink)}
+</style>
+</head>
+<body>
+<a class="skip-link" href="#deck">Skip to timer</a>
+
+<header class="site-header">
+  <a class="mark" href="/" aria-label="David Okunfolami — home">DO</a>
+  <nav aria-label="Site">
+    <a href="/#projects">projects</a>
+    <a href="/blog/">blog</a>
+    <a href="/focus/" aria-current="page">focus</a>
+    <a href="/#about">about</a>
+    <a href="/#contact">contact</a>
+  </nav>
+</header>
+
+<main class="app">
+  <header class="top">
+    <h1 class="brand">Focus <span class="outline">Desk</span></h1>
+    <span class="chip-status" id="saveStatus">Saved in this browser</span>
+    <span class="spacer"></span>
+    <span class="keys"><kbd>Space</kbd> start / pause &nbsp; <kbd>D</kbd> log a distraction</span>
+    <button class="btn small" id="pipBtn" type="button" hidden>Pop out mini timer</button>
+    <button class="btn small" id="settingsBtn" aria-expanded="false" aria-controls="settings">Timer settings</button>
+  </header>
+
+  <div class="settings" id="settings" hidden>
+    <label for="sFocus">Focus block (min)<input class="field" id="sFocus" type="number" min="5" max="120" step="5"></label>
+    <label for="sBreak">Short break (min)<input class="field" id="sBreak" type="number" min="1" max="30"></label>
+    <label for="sLong">Long break, every 4th (min)<input class="field" id="sLong" type="number" min="5" max="45"></label>
+    <label for="sVol">Alarm volume<select class="field" id="sVol"><option value="quiet">Quiet</option><option value="normal">Normal</option><option value="loud">Loud</option></select></label>
+    <label class="inline" for="sSound"><input id="sSound" type="checkbox"> Alarm when a block or break ends</label>
+    <div><button class="btn small" id="testAlarm" type="button">Test alarm</button></div>
+    <p class="pip-note" id="pipNote">The floating mini timer needs Chrome or Edge. In other browsers, keep this tab in a small window pinned on top instead (on Windows, PowerToys "Always On Top": Win + Ctrl + T).</p>
+  </div>
+
+  <div class="grid">
+    <div class="col">
+      <section class="deck" id="deck" aria-label="Current block">
+        <div class="deck-top">
+          <span class="phase-label" id="phaseLabel">Ready</span>
+          <span class="block-count" id="blockCount"></span>
+        </div>
+        <div class="alarm" id="alarm" role="alert" hidden>
+          <strong id="alarmText"></strong>
+          <button class="btn small" id="stopAlarm" type="button">Stop alarm</button>
+        </div>
+
+        <div id="vIdle" class="col" style="gap:14px">
+          <div class="resume" id="resumeBox" hidden>
+            <span class="eyebrow">Pick up here</span>
+            <p id="resumeText"></p>
+          </div>
+          <div>
+            <label class="lbl" for="goal">This block I will…</label>
+            <input class="field" id="goal" autocomplete="off" placeholder="e.g. Solve Valid Anagram, then explain it out loud">
+          </div>
+          <div class="checks" id="checks" role="group" aria-label="Before you start"></div>
+          <details class="dump" id="dumpBox">
+            <summary>Anything left over from your day? Dump it here first.</summary>
+            <textarea class="field" id="dump" placeholder="Emails to answer, shift stuff, things to buy…"></textarea>
+            <p class="why">Unfinished things keep running in the back of your mind and take attention from the next task. Writing them down gives your brain permission to let go.</p>
+          </details>
+          <div class="nudge" id="nudge" hidden>
+            <p id="nudgeText"></p>
+            <button class="btn small" id="nudgeYes">Add 5 minutes</button>
+            <button class="btn quiet small" id="nudgeNo">Not yet</button>
+          </div>
+          <div class="row">
+            <button class="btn primary" id="startBtn">Start block</button>
+            <div class="stepper" aria-label="Block length">
+              <button id="lenDown" aria-label="Five minutes shorter">−</button>
+              <span id="lenVal"></span>
+              <button id="lenUp" aria-label="Five minutes longer">+</button>
+            </div>
+          </div>
+          <p class="why">Pick a length you can actually hold. When it feels easy three blocks in a row, the app will suggest adding five minutes.</p>
+        </div>
+
+        <div id="vRun" class="col" style="gap:14px" hidden>
+          <p class="goal-now" id="goalNow"></p>
+          <div class="clock" id="clock" role="timer" aria-live="off">25:00</div>
+          <div class="ticks" id="ticks" aria-hidden="true"></div>
+          <div class="ticks-scale" aria-hidden="true"><span>0</span><span id="scaleEnd"></span></div>
+          <div class="row">
+            <button class="btn primary" id="pauseBtn">Pause</button>
+            <button class="btn" id="endBtn">End block</button>
+            <button class="btn quiet" id="skipBreakBtn" hidden>Skip break</button>
+          </div>
+          <div id="repsBox" class="col" style="gap:8px">
+            <div class="reps">
+              <button class="btn" id="repBtn" type="button">✓ Finished one</button>
+              <span class="why">Exercises done this block: <b id="repCount">0</b></span>
+            </div>
+            <p class="rep-msg" id="repMsg" hidden></p>
+          </div>
+          <div id="focusExtras" class="mini-rules">
+            <span class="eyebrow">Your if-then plans</span>
+            <div id="miniRules" class="col" style="gap:4px"></div>
+          </div>
+          <div id="breakExtras" class="col" style="gap:12px" hidden>
+            <div class="break-idea">
+              <span class="eyebrow">Away from the screen</span>
+              <strong id="breakIdea"></strong>
+              <p class="why" id="breakWhy"></p>
+              <div><button class="btn quiet small" id="anotherIdea">Another idea</button></div>
+            </div>
+            <div class="parked" id="parkedBox" hidden>
+              <span class="eyebrow">Parked during that block</span>
+              <div id="parked"></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="vWrap" class="col" style="gap:12px" hidden>
+          <h2 id="wrapTitle">Block done.</h2>
+          <p class="why" id="wrapSub"></p>
+          <div>
+            <label class="lbl" for="resumeNote">Where did you get to, and what's next?</label>
+            <textarea class="field" id="resumeNote" placeholder="e.g. Got the hash map version working. Next: explain why it's O(n) without notes."></textarea>
+          </div>
+          <p class="why">A ready-to-resume note lets your brain set this task aside during the break, and makes the next start quick.</p>
+          <div class="row">
+            <button class="btn primary" id="toBreak">Save and start break</button>
+            <button class="btn" id="noBreak">Save, no break</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="sec" aria-labelledby="jH">
+        <div class="sec-h">
+          <h2 id="jH">Distraction journal</h2>
+          <span class="count" id="jCount"></span>
+        </div>
+        <p class="why">When the urge to switch hits, write it here instead of acting on it. Tag why, and you'll get the matching move.</p>
+        <form class="capture" id="capture" autocomplete="off">
+          <label for="jInput" class="sr" style="position:absolute;left:-9999px">Distraction</label>
+          <input class="field" id="jInput" placeholder="Wanted to check… / remembered… (Enter to log)">
+          <button class="btn" type="submit">Log</button>
+        </form>
+        <div class="tags" id="tags" role="group" aria-label="Why the urge?"></div>
+        <p class="hint" id="hint" hidden></p>
+        <div class="row" style="justify-content:space-between">
+          <div class="tabs" role="tablist" aria-label="Filter">
+            <button role="tab" id="tabOpen" aria-selected="true">Still to deal with</button>
+            <button role="tab" id="tabAll" aria-selected="false">All</button>
+          </div>
+        </div>
+        <div class="jlist" id="jList"></div>
+      </section>
+    </div>
+
+    <div class="col">
+      <section class="sec" aria-labelledby="rH">
+        <div class="sec-h"><h2 id="rH">If-then plans</h2><span class="count" id="rCount"></span></div>
+        <p class="why">Decide your response before the urge arrives, so there's nothing to negotiate in the moment. These show under the timer while you focus.</p>
+        <ul class="rules" id="rules"></ul>
+        <form class="rule-form" id="ruleForm" autocomplete="off">
+          <span>If</span><input class="field" id="ruleIf" placeholder="I want to open YouTube" aria-label="If">
+          <span>Then</span><input class="field" id="ruleThen" placeholder="I log it and read one more paragraph" aria-label="Then">
+          <button class="btn small" type="submit">Add plan</button>
+        </form>
+      </section>
+
+      <section class="sec" aria-labelledby="wH">
+        <div class="sec-h"><h2 id="wH">Last 7 days</h2><span class="legend">Bars: minutes focused</span></div>
+        <div class="stats" id="stats"></div>
+        <div>
+          <div class="bars" id="bars"></div>
+          <div class="bar-days" id="barDays" style="margin-top:4px"></div>
+        </div>
+        <p class="why" id="topUrge"></p>
+      </section>
+
+      <section class="sec" aria-labelledby="sH">
+        <div class="sec-h"><h2 id="sH">Desk setup</h2><span class="count" id="sCount"></span></div>
+        <p class="why">One-time changes that make switching harder before willpower is needed.</p>
+        <ul class="setup" id="setup"></ul>
+      </section>
+    </div>
+  </div>
+</main>
+
+<footer class="site-footer">
+  <div class="footer-row">
+    <p>© 2026 David Okunfolami — Edinburgh</p>
+    <ul class="link-row" aria-label="Contact links">
+      <li><a href="https://github.com/Dah-vid" aria-label="GitHub"><svg class="social-icon" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg></a></li>
+      <li><a href="https://www.linkedin.com/in/davidokunfolami/" aria-label="LinkedIn"><svg class="social-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg></a></li>
+      <li><a href="https://x.com/thatboycodes" aria-label="X (formerly Twitter)"><svg class="social-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932ZM17.61 20.644h2.039L6.486 3.24H4.298Z"/></svg></a></li>
+      <li><a href="mailto:okunfolamidavid@gmail.com" aria-label="Email"><svg class="social-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m3 6 9 7 9-7"/></svg></a></li>
+    </ul>
+  </div>
+</footer>
+
+<script>
+(function(){
+const $ = id => document.getElementById(id);
+const now = () => Date.now();
+const IDLE_TITLE = 'Focus Desk — David Okunfolami';
+const mkId = () => now().toString(36) + Math.random().toString(36).slice(2,7);
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+
+/* ---------- content ---------- */
+const TAGS = [
+  {id:'autopilot', label:'Autopilot', hint:'Caught it. Re-read your last sentence and carry on.'},
+  {id:'bored', label:'Bored', hint:'Make it active. Explain the idea out loud from memory, or write the code yourself.'},
+  {id:'effort', label:"Don't want to think", hint:"That's the effort cost talking, and it peaks right after you finish something. Skip the reward for now: read the next problem and write its first line. The reward is your break."},
+  {id:'stuck', label:'Stuck', hint:'Shrink it. Write down the next smallest step and do only that.'},
+  {id:'task', label:'Remembered a task', hint:'Parked. It will be waiting for you at the break.'}
+];
+const CHECKS = [
+  {id:'phone', label:'Phone in another room'},
+  {id:'blocker', label:'Blocker on'},
+  {id:'audio', label:'Headphones: silence or instrumental'},
+  {id:'water', label:'Water on the desk'}
+];
+const SETUP = [
+  {id:'phone', t:'Phone lives outside the room while you study', w:'The evidence on a silent phone nearby is mixed: Ward et al. (2017) and a 22-study meta-analysis found a cost, a pre-registered replication found none. Out of the room removes the temptation to pick it up either way.'},
+  {id:'profile', t:'Make a separate browser profile just for study', w:'No logins, bookmarks or history, so typing "y" no longer autocompletes to YouTube. The extra steps give you time to notice.'},
+  {id:'blocker', t:'Block only your top escape sites', w:'In a 217-person trial, blocking everything cut working time while partial blocking raised it. Use this journal to find which sites to block (Freedom, Cold Turkey or LeechBlock).'},
+  {id:'newtab', t:'Set this page as your new-tab page in the study profile', w:'Every new tab then shows your goal for the block instead of an invitation to wander.'},
+  {id:'audio', t:'Noise cancelling with silence or instrumental only', w:'Music with lyrics hurt reading comprehension and memory in studies. Instrumental lo-fi did not clearly help or hurt.'}
+];
+const BREAKS = [
+  ['Refill your water', 'Standing up and walking resets you more than scrolling does.'],
+  ['Walk to the window and look outside', 'Give your attention something that asks nothing of it.'],
+  ['Stretch your neck, shoulders and back', 'Two minutes of movement, no screen.'],
+  ['Walk a lap of the flat', 'In a 414-student experiment, people who spent their break on a phone ended up more drained than those who took it on paper or a computer.'],
+  ['Make a tea and stay with it', 'Leave the phone where it is. A break on YouTube is just another task switch.'],
+  ['Close your eyes and breathe slowly for a minute', 'Let the last block settle before the next one.']
+];
+const DEFAULT_RULES = [
+  {id:'r1', if:'I feel the pull to open a new tab', then:'I write it in the journal and re-read my last sentence'},
+  {id:'r2', if:"I'm bored or just re-reading", then:'I close the material and explain it out loud from memory'},
+  {id:'r3', if:"I'm stuck for more than five minutes", then:'I write the next smallest step and do only that'},
+  {id:'r4', if:'I just finished an exercise and want a reward', then:'I press Finished one, read the next problem and write its first line'}
+];
+const DEFAULTS = {focusMin:25, breakMin:5, longBreakMin:15, sound:true, volume:'normal', rules:DEFAULT_RULES, setup:{}, resume:null, nudgeSkip:0, seeded:['r4']};
+function migrate(s){
+  s = Object.assign({}, DEFAULTS, s);
+  const seen = Array.isArray(s.seeded) ? s.seeded : [];
+  if (!seen.includes('r4')){
+    if (!s.rules.some(r => r.id === 'r4')) s.rules = s.rules.concat(DEFAULT_RULES[3]);
+    s.seeded = seen.concat('r4');
+  }
+  return s;
+}
+
+/* ---------- storage: this browser only (localStorage), no account or server ---------- */
+const store = (() => {
+  const P = 'focusdesk:';
+  const lsGet = k => { try { const v = localStorage.getItem(P + k); return v ? JSON.parse(v) : null; } catch (e) { return null; } };
+  const lsSet = (k, v) => { try { localStorage.setItem(P + k, JSON.stringify(v)); } catch (e) {} };
+  return { lsGet, lsSet, save: lsSet };
+})();
+
+let settings = migrate(store.lsGet('settings') || {});
+let journal = store.lsGet('journal') || {entries:[]};
+let log = store.lsGet('log') || {blocks:[]};
+let T = store.lsGet('timer') || {phase:'idle'};
+if (!T.checks) T.checks = {};
+
+const saveSettings = () => store.save('settings', settings);
+const saveJournal = () => { if (journal.entries.length > 800) journal.entries = journal.entries.slice(-800); store.save('journal', journal); };
+const saveLog = () => { if (log.blocks.length > 600) log.blocks = log.blocks.slice(-600); store.save('log', log); };
+const saveTimer = () => store.lsSet('timer', T);
+
+/* ---------- dates ---------- */
+const dayKey = t => { const d = new Date(t); return d.getFullYear() + '-' + (d.getMonth()+1) + '-' + d.getDate(); };
+const hm = t => new Date(t).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+function dayLabel(t){
+  const k = dayKey(t), today = dayKey(now()), y = dayKey(now() - 864e5);
+  if (k === today) return 'Today'; if (k === y) return 'Yesterday';
+  return new Date(t).toLocaleDateString([], {weekday:'short', day:'numeric', month:'short'});
+}
+const todaysBlocks = () => log.blocks.filter(b => dayKey(b.end) === dayKey(now()));
+
+/* ---------- sound ---------- */
+let actx = null;
+function ensureAudio(){ try { if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === 'suspended') actx.resume(); } catch (e) {} }
+const VOL = {quiet:0.12, normal:0.3, loud:0.6};
+function beeps(kind){
+  if (!actx) return;
+  try {
+    const t = actx.currentTime, peak = VOL[settings.volume] || VOL.normal;
+    const notes = kind === 'break' ? [784, 784, 1047, 1047] : [1047, 880, 1047, 880];
+    notes.forEach((f, i) => {
+      const o = actx.createOscillator(), g = actx.createGain(), s = t + i * 0.22;
+      o.type = 'square'; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, s); g.gain.exponentialRampToValueAtTime(peak * 0.5, s + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, s + 0.18);
+      o.connect(g); g.connect(actx.destination); o.start(s); o.stop(s + 0.2);
+    });
+  } catch (e) {}
+}
+let alarmLoop = null, alarmUntil = 0, alarmArmedAt = 0;
+function startAlarm(kind){
+  stopAlarm();
+  $('alarmText').textContent = kind === 'break' ? 'Break over. Back to the desk.' : kind === 'test' ? 'This is your alarm.' : 'Block done. Write your resume note.';
+  $('alarm').hidden = false; document.body.classList.add('ringing');
+  document.title = "Time's up · Focus Desk";
+  alarmArmedAt = now();
+  renderPip();
+  if (!settings.sound) return;
+  ensureAudio(); beeps(kind);
+  alarmUntil = now() + (kind === 'test' ? 3000 : 60000);
+  alarmLoop = setInterval(() => { if (now() > alarmUntil) { clearInterval(alarmLoop); alarmLoop = null; return; } beeps(kind); }, 1600);
+}
+function stopAlarm(){
+  if (alarmLoop) { clearInterval(alarmLoop); alarmLoop = null; }
+  if ($('alarm').hidden) return;
+  $('alarm').hidden = true; document.body.classList.remove('ringing');
+  if (T.phase === 'idle') document.title = IDLE_TITLE;
+  renderPip();
+}
+document.addEventListener('pointerdown', ensureAudio, {once:true});
+/* Any click or key silences the alarm (ignore the click that triggered a test). */
+['pointerdown', 'keydown'].forEach(ev => document.addEventListener(ev, () => { if (!$('alarm').hidden && now() - alarmArmedAt > 400) stopAlarm(); }, true));
+
+/* ---------- timer ---------- */
+function remaining(){ return T.running ? Math.max(0, T.endAt - now()) : (T.remaining ?? T.total ?? 0); }
+function fmt(ms){ const s = Math.ceil(ms / 1000); return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0'); }
+
+function startFocus(){
+  ensureAudio(); stopAlarm(); $('repMsg').hidden = true;
+  const goal = $('goal').value.trim();
+  const total = settings.focusMin * 60000;
+  T = Object.assign(T, {phase:'focus', running:true, total, endAt:now() + total, remaining:null,
+    block:{id:mkId(), start:now(), goal, planned:settings.focusMin}, focusMs:0, segStart:now()});
+  saveTimer(); renderAll();
+}
+function pause(){
+  if (!T.running) return;
+  T.remaining = Math.max(0, T.endAt - now()); T.running = false;
+  if (T.phase === 'focus') T.focusMs += now() - T.segStart;
+  saveTimer(); renderTimer();
+}
+function resume(){
+  if (T.running || (T.phase !== 'focus' && T.phase !== 'break')) return;
+  ensureAudio();
+  T.endAt = now() + (T.remaining ?? 0); T.running = true; T.segStart = now();
+  saveTimer(); renderTimer();
+}
+function finishFocus(completed){
+  if (T.running) T.focusMs += Math.min(now(), T.endAt) - T.segStart;
+  T.running = false; T.phase = 'wrap'; T.completed = completed;
+  saveTimer(); renderAll();
+  if (completed) startAlarm('focus');
+  setTimeout(() => $('resumeNote').focus(), 50);
+}
+function saveWrap(goBreak){
+  const note = $('resumeNote').value.trim();
+  const b = T.block || {id:mkId(), start:now(), goal:'', planned:settings.focusMin};
+  const distractions = journal.entries.filter(e => e.blockId === b.id).length;
+  log.blocks.push({id:b.id, start:b.start, end:now(), goal:b.goal, planned:b.planned,
+    focusedMin:Math.round((T.focusMs || 0) / 60000), completed:!!T.completed, distractions, reps:b.reps || 0});
+  saveLog();
+  settings.resume = note ? {text:note, at:now()} : null; saveSettings();
+  $('resumeNote').value = ''; $('goal').value = '';
+  T.lastBlockId = b.id; T.block = null; T.checks = {};
+  if (goBreak){
+    const n = todaysBlocks().filter(x => x.completed).length;
+    const long = n > 0 && n % 4 === 0;
+    const total = (long ? settings.longBreakMin : settings.breakMin) * 60000;
+    Object.assign(T, {phase:'break', running:true, total, endAt:now() + total, remaining:null, longBreak:long});
+    T.breakIdx = Math.floor(Math.random() * BREAKS.length);
+  } else {
+    T.phase = 'idle'; T.running = false;
+  }
+  saveTimer(); renderAll();
+}
+function endBreak(ring){
+  T.phase = 'idle'; T.running = false; saveTimer(); renderAll();
+  if (ring) startAlarm('break');
+}
+function tick(){
+  if (T.running && now() >= T.endAt){
+    if (T.phase === 'focus') finishFocus(true);
+    else if (T.phase === 'break') endBreak(true);
+    return;
+  }
+  if (T.phase === 'focus' || T.phase === 'break') renderClock();
+}
+setInterval(tick, 250);
+
+/* ---------- render: deck ---------- */
+let tickCount = 0;
+function renderClock(){
+  const rem = remaining(), total = T.total || 1;
+  $('clock').textContent = fmt(rem);
+  const mins = Math.max(1, Math.round(total / 60000));
+  const ticks = $('ticks');
+  if (tickCount !== mins){
+    ticks.textContent = ''; for (let i = 0; i < mins; i++) ticks.appendChild(el('i'));
+    tickCount = mins; $('scaleEnd').textContent = mins + ' min';
+  }
+  const elapsedMin = (total - rem) / 60000, full = Math.floor(elapsedMin);
+  [...ticks.children].forEach((t, i) => { t.className = i < full ? 'on' : (i === full && T.running ? 'now' : ''); });
+  document.title = (T.running ? fmt(rem) : 'Paused') + ' · ' + (T.phase === 'break' ? 'Break' : 'Focus');
+  renderPip();
+}
+
+/* ---------- floating mini timer (Document Picture-in-Picture) ---------- */
+let pipWin = null, pipTick = null;
+const pipSupported = (() => { try { return 'documentPictureInPicture' in window && window.top === window; } catch (e) { return false; } })();
+async function openPip(){
+  if (pipWin) return;
+  ensureAudio();
+  try { pipWin = await window.documentPictureInPicture.requestWindow({width:320, height:230}); }
+  catch (e) { pipWin = null; return; }
+  const d = pipWin.document;
+  document.querySelectorAll('style, link[rel="stylesheet"]').forEach(n => d.head.appendChild(n.cloneNode(true)));
+  d.title = 'Focus Desk';
+  const wrap = d.createElement('div'); wrap.className = 'mini';
+  wrap.innerHTML =
+    '<div class="mini-top"><span class="phase-label" id="mPhase"></span><button class="btn quiet small" id="mBack" type="button">Back to desk</button></div>' +
+    '<div class="alarm" id="mAlarm" hidden><strong id="mAlarmText"></strong><button class="btn small" id="mStop" type="button">Stop</button></div>' +
+    '<div class="clock" id="mClock"></div>' +
+    '<div class="mini-goal" id="mGoal"></div>' +
+    '<div class="row"><button class="btn primary small" id="mMain" type="button"></button><button class="btn small" id="mRep" type="button">✓ Finished one</button></div>' +
+    '<form id="mLog" autocomplete="off"><input class="field" id="mInput" placeholder="Urge to switch? Log it" aria-label="Log a distraction"><button class="btn small" type="submit">Log</button></form>';
+  d.body.appendChild(wrap);
+  const g = id => d.getElementById(id);
+  g('mMain').onclick = () => {
+    if (T.phase === 'idle') startFocus();
+    else if (T.phase === 'focus' || T.phase === 'break') (T.running ? pause() : resume());
+    else { try { window.focus(); } catch (e) {} }
+  };
+  g('mRep').onclick = () => $('repBtn').click();
+  g('mStop').onclick = stopAlarm;
+  g('mBack').onclick = () => { try { window.focus(); } catch (e) {} };
+  g('mLog').addEventListener('submit', ev => {
+    ev.preventDefault(); const t = g('mInput').value.trim(); if (!t) return;
+    logDistraction(t, null); g('mInput').value = '';
+    const ph = g('mInput').placeholder; g('mInput').placeholder = 'Logged. Back to it.';
+    setTimeout(() => { if (pipWin) g('mInput').placeholder = ph; }, 2500);
+  });
+  ['pointerdown', 'keydown'].forEach(ev => d.addEventListener(ev, e => { if (e.target.id !== 'mStop' && !$('alarm').hidden && now() - alarmArmedAt > 400) stopAlarm(); }, true));
+  /* The mini window stays visible, so its timer keeps the alarm on time even when the main window is buried. */
+  pipTick = pipWin.setInterval(tick, 250);
+  pipWin.addEventListener('pagehide', () => { pipWin = null; pipTick = null; $('pipBtn').textContent = 'Pop out mini timer'; });
+  $('pipBtn').textContent = 'Mini timer is open';
+  renderPip();
+}
+function renderPip(){
+  if (!pipWin) return;
+  const d = pipWin.document, g = id => d.getElementById(id);
+  if (!g('mClock')) return;
+  const p = T.phase || 'idle';
+  d.body.dataset.phase = p;
+  g('mPhase').textContent = $('phaseLabel').textContent;
+  g('mClock').textContent = (p === 'focus' || p === 'break') ? fmt(remaining()) : p === 'wrap' ? 'Done' : fmt(settings.focusMin * 60000);
+  const goal = p === 'break' ? 'Break: step away from the screen' : p === 'wrap' ? 'Write your resume note on the desk' : (T.block && T.block.goal) || ($('goal').value.trim() || 'No goal set');
+  g('mGoal').textContent = goal;
+  g('mMain').textContent = p === 'idle' ? 'Start block' : (p === 'focus' || p === 'break') ? (T.running ? 'Pause' : 'Resume') : 'Open desk';
+  g('mRep').hidden = p !== 'focus';
+  g('mLog').hidden = p === 'break';
+  g('mAlarm').hidden = $('alarm').hidden; g('mAlarmText').textContent = $('alarmText').textContent;
+}
+if (pipSupported) { $('pipBtn').hidden = false; $('pipNote').hidden = true; $('pipBtn').onclick = openPip; }
+function renderTimer(){
+  const p = T.phase || 'idle';
+  document.body.dataset.phase = p;
+  $('vIdle').hidden = p !== 'idle'; $('vRun').hidden = !(p === 'focus' || p === 'break'); $('vWrap').hidden = p !== 'wrap';
+  $('deck').classList.toggle('paused', !T.running && (p === 'focus' || p === 'break'));
+  const labels = {idle:'Ready', focus:T.running ? 'Focusing' : 'Paused', break:T.running ? (T.longBreak ? 'Long break' : 'Break') : 'Break paused', wrap:'Wrap up'};
+  $('phaseLabel').textContent = labels[p];
+  const tb = todaysBlocks(), done = tb.filter(b => b.completed).length, mins = tb.reduce((a, b) => a + (b.focusedMin || 0), 0);
+  $('blockCount').textContent = done + (done === 1 ? ' block' : ' blocks') + ' · ' + mins + ' min focused today';
+
+  if (p === 'idle'){
+    document.title = IDLE_TITLE;
+    const r = settings.resume;
+    $('resumeBox').hidden = !r; if (r) $('resumeText').textContent = r.text;
+    $('lenVal').textContent = settings.focusMin + ' min';
+    $('startBtn').textContent = 'Start ' + settings.focusMin + '-min block';
+    renderChecks(); renderNudge();
+  }
+  if (p === 'focus' || p === 'break'){
+    const isBreak = p === 'break';
+    const g = isBreak ? (T.longBreak ? 'Long break. You have earned it.' : 'Break. Step away from the screen.') : (T.block && T.block.goal) || 'No goal set for this block';
+    $('goalNow').textContent = g; $('goalNow').classList.toggle('empty', !isBreak && !(T.block && T.block.goal));
+    $('pauseBtn').textContent = T.running ? 'Pause' : 'Resume';
+    $('endBtn').hidden = isBreak; $('skipBreakBtn').hidden = !isBreak;
+    $('focusExtras').hidden = isBreak || !settings.rules.length; $('breakExtras').hidden = !isBreak;
+    $('repsBox').hidden = isBreak; $('repCount').textContent = (T.block && T.block.reps) || 0;
+    if (isBreak) renderBreak(); else renderMiniRules();
+    renderClock();
+  }
+  if (p === 'wrap'){
+    $('wrapTitle').textContent = T.completed ? 'Block done.' : 'Block ended early.';
+    const n = journal.entries.filter(e => T.block && e.blockId === T.block.id).length;
+    const m = Math.round((T.focusMs || 0) / 60000);
+    const r = (T.block && T.block.reps) || 0;
+    $('wrapSub').textContent = m + ' min focused, ' + (r ? r + (r === 1 ? ' exercise' : ' exercises') + ' finished, ' : '') + n + (n === 1 ? ' distraction' : ' distractions') + ' logged.' + (T.completed ? '' : ' Ending early is information, not failure. If it keeps happening, try a shorter block.');
+    document.title = 'Wrap up · Focus Desk';
+  }
+  renderPip();
+}
+function renderChecks(){
+  const box = $('checks'); box.textContent = '';
+  CHECKS.forEach(c => {
+    const b = el('button', 'tog', c.label); b.type = 'button'; b.setAttribute('aria-pressed', T.checks[c.id] ? 'true' : 'false');
+    b.onclick = () => { T.checks[c.id] = !T.checks[c.id]; saveTimer(); renderChecks(); };
+    box.appendChild(b);
+  });
+}
+function nudgeLen(){
+  const L = settings.focusMin;
+  if (settings.nudgeSkip === L || L >= 90) return 0;
+  const last = log.blocks.slice(-3);
+  return last.length === 3 && last.every(b => b.completed && b.planned === L) ? L : 0;
+}
+function renderNudge(){
+  const L = nudgeLen(); $('nudge').hidden = !L;
+  if (L) $('nudgeText').textContent = 'You held ' + L + ' minutes for three blocks in a row. Ready for ' + (L + 5) + '?';
+}
+function renderMiniRules(){
+  const box = $('miniRules'); box.textContent = '';
+  settings.rules.forEach(r => {
+    const p = el('p'); const a = el('span', 'kw', 'If '), b = el('span', 'kw', ' then ');
+    p.append(a, document.createTextNode(r.if + ','), b, document.createTextNode(r.then + '.'));
+    box.appendChild(p);
+  });
+}
+function renderBreak(){
+  const [t, w] = BREAKS[(T.breakIdx || 0) % BREAKS.length];
+  $('breakIdea').textContent = t; $('breakWhy').textContent = w;
+  const parked = journal.entries.filter(e => e.blockId === T.lastBlockId);
+  $('parkedBox').hidden = !parked.length;
+  const box = $('parked'); box.textContent = '';
+  parked.forEach(e => box.appendChild(entryRow(e)));
+}
+
+/* ---------- journal ---------- */
+let pickedTag = null, filter = 'open', hintTimer = null;
+function renderTags(){
+  const box = $('tags'); box.textContent = '';
+  TAGS.forEach(t => {
+    const b = el('button', 'tag', t.label); b.type = 'button'; b.setAttribute('aria-pressed', pickedTag === t.id ? 'true' : 'false');
+    b.onclick = () => { pickedTag = pickedTag === t.id ? null : t.id; renderTags(); $('jInput').focus(); };
+    box.appendChild(b);
+  });
+}
+function entryRow(e){
+  const row = el('div', 'entry' + (e.done ? ' done' : ''));
+  const cb = el('input'); cb.type = 'checkbox'; cb.checked = !!e.done; cb.setAttribute('aria-label', 'Dealt with');
+  cb.onchange = () => { e.done = cb.checked; saveJournal(); renderJournal(); if (T.phase === 'break') renderBreak(); };
+  const txt = el('div', 'txt', e.text);
+  const meta = el('div', 'meta');
+  const tag = TAGS.find(t => t.id === e.tag);
+  if (tag) meta.appendChild(el('span', 'pill ' + tag.id, tag.label));
+  meta.appendChild(el('span', 'time', hm(e.at) + (e.blockId ? ' · in block' : '')));
+  const x = el('button', 'x', '×'); x.type = 'button'; x.setAttribute('aria-label', 'Delete entry');
+  x.onclick = () => { journal.entries = journal.entries.filter(z => z.id !== e.id); saveJournal(); renderJournal(); renderWeek(); if (T.phase === 'break') renderBreak(); };
+  row.append(cb, txt, meta, x);
+  return row;
+}
+function renderJournal(){
+  const list = $('jList'); list.textContent = '';
+  const all = journal.entries.slice().sort((a, b) => b.at - a.at);
+  const shown = (filter === 'open' ? all.filter(e => !e.done) : all).slice(0, 80);
+  const today = all.filter(e => dayKey(e.at) === dayKey(now())).length;
+  $('jCount').textContent = today + ' today';
+  $('tabOpen').setAttribute('aria-selected', filter === 'open'); $('tabAll').setAttribute('aria-selected', filter === 'all');
+  if (!shown.length){
+    list.appendChild(el('p', 'empty-state', all.length ? 'Nothing waiting. Everything you logged has been dealt with.' : 'Nothing logged yet. Next time you reach for a tab, type what you wanted and press Enter.'));
+    return;
+  }
+  let last = '';
+  shown.forEach(e => { const d = dayLabel(e.at); if (d !== last){ list.appendChild(el('div', 'day', d)); last = d; } list.appendChild(entryRow(e)); });
+}
+function logDistraction(text, tagId){
+  const inBlock = T.phase === 'focus' && T.block;
+  journal.entries.push({id:mkId(), at:now(), text, tag:tagId, blockId:inBlock ? T.block.id : null, done:false});
+  saveJournal();
+  const tag = TAGS.find(t => t.id === tagId);
+  $('hint').textContent = tag ? tag.hint : 'Logged. Back to it.'; $('hint').hidden = false;
+  clearTimeout(hintTimer); hintTimer = setTimeout(() => { $('hint').hidden = true; }, 9000);
+  renderJournal(); renderWeek();
+  return inBlock;
+}
+$('capture').addEventListener('submit', ev => {
+  ev.preventDefault();
+  const text = $('jInput').value.trim(); if (!text) return;
+  const inBlock = logDistraction(text, pickedTag);
+  $('jInput').value = ''; pickedTag = null; renderTags();
+  if (inBlock) $('jInput').blur();
+});
+$('tabOpen').onclick = () => { filter = 'open'; renderJournal(); };
+$('tabAll').onclick = () => { filter = 'all'; renderJournal(); };
+
+/* ---------- rules ---------- */
+function renderRules(){
+  const ul = $('rules'); ul.textContent = '';
+  $('rCount').textContent = settings.rules.length + (settings.rules.length === 1 ? ' plan' : ' plans');
+  settings.rules.forEach(r => {
+    const li = el('li', 'rule'); const p = el('p');
+    p.append(el('span', 'kw', 'If '), document.createTextNode(r.if + ', '), el('span', 'kw', 'then '), document.createTextNode(r.then + '.'));
+    const x = el('button', 'x', '×'); x.type = 'button'; x.setAttribute('aria-label', 'Delete plan');
+    x.onclick = () => { settings.rules = settings.rules.filter(z => z.id !== r.id); saveSettings(); renderRules(); renderMiniRules(); };
+    li.append(p, x); ul.appendChild(li);
+  });
+  if (!settings.rules.length) ul.appendChild(el('li', 'empty-state', 'No plans yet. Add one below.'));
+}
+$('ruleForm').addEventListener('submit', ev => {
+  ev.preventDefault();
+  const i = $('ruleIf').value.trim().replace(/^if\s+/i, '').replace(/[,.]$/, ''), t = $('ruleThen').value.trim().replace(/^then\s+/i, '').replace(/\.$/, '');
+  if (!i || !t) return;
+  settings.rules = settings.rules.concat({id:mkId(), if:i, then:t}); saveSettings();
+  $('ruleIf').value = ''; $('ruleThen').value = ''; renderRules(); renderMiniRules();
+});
+
+/* ---------- week ---------- */
+function renderWeek(){
+  const days = [];
+  for (let i = 6; i >= 0; i--){
+    const t = now() - i * 864e5, k = dayKey(t);
+    const bl = log.blocks.filter(b => dayKey(b.end) === k);
+    days.push({t, k, min:bl.reduce((a, b) => a + (b.focusedMin || 0), 0), blocks:bl.filter(b => b.completed).length,
+      dist:journal.entries.filter(e => dayKey(e.at) === k).length});
+  }
+  const max = Math.max(30, ...days.map(d => d.min));
+  const bars = $('bars'), lbl = $('barDays'); bars.textContent = ''; lbl.textContent = '';
+  days.forEach((d, i) => {
+    const b = el('div', 'bar' + (d.min ? '' : ' zero') + (i === 6 ? ' today' : ''));
+    b.appendChild(el('span', 'v', d.min ? String(d.min) : ''));
+    const f = el('div', 'col-fill'); f.style.height = (d.min / max * 100) + '%'; b.appendChild(f);
+    b.title = d.min + ' min focused, ' + d.blocks + ' blocks, ' + d.dist + ' distractions';
+    bars.appendChild(b);
+    const s = el('span', null, i === 6 ? 'Today' : new Date(d.t).toLocaleDateString([], {weekday:'short'}));
+    s.appendChild(el('small', null, d.dist + ' log' + (d.dist === 1 ? '' : 's')));
+    lbl.appendChild(s);
+  });
+  const mins = days.reduce((a, d) => a + d.min, 0), blocks = days.reduce((a, d) => a + d.blocks, 0);
+  const inBlock = journal.entries.filter(e => e.blockId && now() - e.at < 7 * 864e5).length;
+  const rate = mins ? (inBlock / (mins / 60)).toFixed(1) : '–';
+  const stats = $('stats'); stats.textContent = '';
+  [[blocks, 'blocks finished'], [(mins / 60).toFixed(1), 'hours focused'], [days.reduce((a, d) => a + d.dist, 0), 'urges logged'], [rate, 'urges per focus hour']].forEach(([v, l]) => {
+    const s = el('div', 'stat'); s.append(el('b', null, String(v)), el('span', null, l)); stats.appendChild(s);
+  });
+  const recent = journal.entries.filter(e => now() - e.at < 7 * 864e5 && e.tag);
+  const counts = {}; recent.forEach(e => counts[e.tag] = (counts[e.tag] || 0) + 1);
+  const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+  const advice = {autopilot:'Most urges are habit. More friction (blocker, study profile) will help most.',
+    bored:'Most urges come from boredom. Swap passive reading for active recall or building.',
+    stuck:'Most urges come from being stuck. Break tasks into smaller steps before you start a block.',
+    effort:'Most urges come right after effort. Press Finished one, then start the next problem before the urge gets a vote.',
+    task:'Most urges are remembered tasks. Do the brain dump before each block.'};
+  $('topUrge').textContent = top ? 'Most common reason this week: ' + TAGS.find(t => t.id === top[0]).label.toLowerCase() + ' (' + top[1] + '). ' + advice[top[0]] : 'Tag your distractions and this will show your most common reason, with what to change.';
+}
+
+/* ---------- setup ---------- */
+function renderSetup(){
+  const ul = $('setup'); ul.textContent = '';
+  let done = 0;
+  SETUP.forEach(s => {
+    const on = !!settings.setup[s.id]; if (on) done++;
+    const li = el('li', on ? 'done' : '');
+    const cb = el('input'); cb.type = 'checkbox'; cb.checked = on; cb.id = 'setup-' + s.id;
+    cb.onchange = () => { settings.setup = Object.assign({}, settings.setup, {[s.id]:cb.checked}); saveSettings(); renderSetup(); };
+    const body = el('div'); const lab = el('label', 't', s.t); lab.htmlFor = cb.id;
+    body.append(lab, el('p', 'why', s.w));
+    li.append(cb, body); ul.appendChild(li);
+  });
+  $('sCount').textContent = done + ' of ' + SETUP.length + ' done';
+}
+
+/* ---------- settings ---------- */
+function fillSettings(){
+  $('sFocus').value = settings.focusMin; $('sBreak').value = settings.breakMin; $('sLong').value = settings.longBreakMin; $('sSound').checked = !!settings.sound; $('sVol').value = settings.volume || 'normal';
+}
+const clamp = (v, lo, hi, d) => { v = parseInt(v, 10); return isNaN(v) ? d : Math.min(hi, Math.max(lo, v)); };
+$('sFocus').onchange = () => { settings.focusMin = clamp($('sFocus').value, 5, 120, 25); saveSettings(); fillSettings(); renderTimer(); };
+$('sBreak').onchange = () => { settings.breakMin = clamp($('sBreak').value, 1, 30, 5); saveSettings(); fillSettings(); };
+$('sLong').onchange = () => { settings.longBreakMin = clamp($('sLong').value, 5, 45, 15); saveSettings(); fillSettings(); };
+$('sSound').onchange = () => { settings.sound = $('sSound').checked; saveSettings(); };
+$('settingsBtn').onclick = () => { const s = $('settings'); s.hidden = !s.hidden; $('settingsBtn').setAttribute('aria-expanded', String(!s.hidden)); };
+$('lenDown').onclick = () => { settings.focusMin = Math.max(5, settings.focusMin - 5); saveSettings(); fillSettings(); renderTimer(); };
+$('lenUp').onclick = () => { settings.focusMin = Math.min(120, settings.focusMin + 5); saveSettings(); fillSettings(); renderTimer(); };
+$('nudgeYes').onclick = () => { settings.focusMin += 5; saveSettings(); fillSettings(); renderTimer(); };
+$('nudgeNo').onclick = () => { settings.nudgeSkip = settings.focusMin; saveSettings(); renderNudge(); };
+
+/* ---------- deck controls ---------- */
+$('startBtn').onclick = startFocus;
+$('goal').addEventListener('keydown', e => { if (e.key === 'Enter') startFocus(); });
+$('goal').addEventListener('input', renderPip);
+$('pauseBtn').onclick = () => T.running ? pause() : resume();
+$('endBtn').onclick = () => finishFocus(false);
+$('skipBreakBtn').onclick = () => endBreak(false);
+$('toBreak').onclick = () => saveWrap(true);
+$('noBreak').onclick = () => saveWrap(false);
+const REP_MSGS = [
+  'Done. Now, before anything else: open the next problem and write its first line.',
+  "That's the reward. Keep the momentum: read the next problem out loud.",
+  'Banked. The urge to check messages is strongest right now. Start the next one instead.',
+  'Nice. Write the next function signature before you think about whether you want to.'
+];
+let repTimer = null;
+$('repBtn').onclick = () => {
+  if (!T.block) return;
+  T.block.reps = (T.block.reps || 0) + 1; saveTimer();
+  $('repCount').textContent = T.block.reps;
+  const m = $('repMsg'); m.textContent = REP_MSGS[(T.block.reps - 1) % REP_MSGS.length]; m.hidden = false;
+  clearTimeout(repTimer); repTimer = setTimeout(() => { m.hidden = true; }, 12000);
+};
+$('stopAlarm').onclick = stopAlarm;
+$('testAlarm').onclick = () => { ensureAudio(); startAlarm('test'); };
+$('sVol').onchange = () => { settings.volume = $('sVol').value; saveSettings(); };
+$('anotherIdea').onclick =() => { T.breakIdx = (T.breakIdx || 0) + 1; saveTimer(); renderBreak(); };
+$('dump').value = T.dump || '';
+$('dump').addEventListener('input', () => { T.dump = $('dump').value; saveTimer(); });
+if (T.dump) $('dumpBox').open = true;
+
+document.addEventListener('keydown', e => {
+  const tag = (e.target.tagName || '').toLowerCase();
+  if (tag === 'input' || tag === 'textarea' || e.target.isContentEditable || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.code === 'Space'){
+    if (tag === 'button') return;
+    e.preventDefault();
+    if (T.phase === 'idle') startFocus(); else if (T.phase === 'focus' || T.phase === 'break') (T.running ? pause() : resume());
+  } else if (e.key === 'd' || e.key === 'D'){ e.preventDefault(); $('jInput').focus(); }
+});
+
+/* ---------- boot ---------- */
+function renderAll(){ renderTimer(); renderTags(); renderJournal(); renderRules(); renderWeek(); renderSetup(); fillSettings(); }
+renderAll();
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { tick(); renderWeek(); } });
+})();
+</script>
+
+</body>
+</html>
