@@ -195,6 +195,8 @@ body[data-phase="idle"] .rule .kw{color:var(--muted)}
 .settings label{font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:4px}
 .settings .field{padding:6px 10px;font-family:var(--mono)}
 .settings .inline{flex-direction:row;align-items:center;gap:8px;color:var(--ink)}
+.data-row{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:center;gap:10px;border-top:1px solid var(--line);padding-top:12px}
+.data-status{font-size:13px;color:var(--muted)}
 </style>
 </head>
 <body>
@@ -218,7 +220,7 @@ body[data-phase="idle"] .rule .kw{color:var(--muted)}
     <span class="spacer"></span>
     <span class="keys"><kbd>Space</kbd> start / pause &nbsp; <kbd>D</kbd> log a distraction</span>
     <button class="btn small" id="pipBtn" type="button" hidden>Pop out mini timer</button>
-    <button class="btn small" id="settingsBtn" aria-expanded="false" aria-controls="settings">Timer settings</button>
+    <button class="btn small" id="settingsBtn" aria-expanded="false" aria-controls="settings">Settings</button>
   </header>
 
   <div class="settings" id="settings" hidden>
@@ -229,6 +231,13 @@ body[data-phase="idle"] .rule .kw{color:var(--muted)}
     <label class="inline" for="sSound"><input id="sSound" type="checkbox"> Alarm when a block or break ends</label>
     <div><button class="btn small" id="testAlarm" type="button">Test alarm</button></div>
     <p class="pip-note" id="pipNote">The floating mini timer needs Chrome or Edge. In other browsers, keep this tab in a small window pinned on top instead (on Windows, PowerToys "Always On Top": Win + Ctrl + T).</p>
+    <div class="data-row">
+      <span class="eyebrow">Your data</span>
+      <button class="btn small" id="exportBtn" type="button">Export for Claude (.json)</button>
+      <button class="btn small" id="importBtn" type="button">Import backup</button>
+      <input type="file" id="importFile" accept=".json,application/json" hidden>
+      <span class="data-status" id="dataStatus" role="status"></span>
+    </div>
   </div>
 
   <div class="grid">
@@ -877,6 +886,60 @@ $('lenDown').onclick = () => { settings.focusMin = Math.max(5, settings.focusMin
 $('lenUp').onclick = () => { settings.focusMin = Math.min(120, settings.focusMin + 5); saveSettings(); fillSettings(); renderTimer(); };
 $('nudgeYes').onclick = () => { settings.focusMin += 5; saveSettings(); fillSettings(); renderTimer(); };
 $('nudgeNo').onclick = () => { settings.nudgeSkip = settings.focusMin; saveSettings(); renderNudge(); };
+
+/* ---------- export / import ----------
+   Export: a JSON file meant to be handed to Claude for analysis. Readable copies first (ISO times,
+   tag labels), the untouched stored state under raw. Import reads raw back and only ever adds:
+   anything whose id is already here is skipped, so importing the same file twice changes nothing. */
+const iso = t => (typeof t === 'number' && isFinite(t)) ? new Date(t).toISOString() : null;
+const tagLabel = id => { const t = TAGS.find(x => x.id === id); return t ? t.label : null; };
+function exportData(){
+  const data = {
+    app:'focus-desk', version:1, exportedAt:new Date().toISOString(),
+    timezone:Intl.DateTimeFormat().resolvedOptions().timeZone,
+    notes:'blocks = focus sessions (planned/focused minutes, completed = ran to the end, reps = exercises finished). journal = urges to switch, tagged with why; blockId links an urge to the block it happened in.',
+    settings:{focusMin:settings.focusMin, breakMin:settings.breakMin, longBreakMin:settings.longBreakMin, rules:settings.rules},
+    blocks:log.blocks.map(b => Object.assign({}, b, {startTime:iso(b.start), endTime:iso(b.end)})),
+    journal:journal.entries.map(e => Object.assign({}, e, {time:iso(e.at), tagLabel:tagLabel(e.tag)})),
+    raw:{settings, journal, log}
+  };
+  const d = new Date(), pad = n => String(n).padStart(2, '0');
+  const name = 'focus-desk-' + d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + '.json';
+  const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], {type:'application/json'}));
+  const a = el('a'); a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000); // revoking in the same tick can cancel the download in some browsers
+  $('dataStatus').textContent = 'Exported ' + data.blocks.length + ' blocks and ' + data.journal.length + ' journal entries.';
+}
+function mergeById(have, incoming){
+  const ids = new Set(have.map(x => x.id));
+  const added = (Array.isArray(incoming) ? incoming : []).filter(x => x && typeof x === 'object' && x.id != null && !ids.has(x.id) && ids.add(x.id));
+  return {merged:have.concat(added), added:added.length};
+}
+async function importData(file){
+  try {
+    const data = JSON.parse(await file.text());
+    if (!data || data.app !== 'focus-desk' || !data.raw) throw new Error('not a Focus Desk export');
+    const raw = data.raw;
+    const j = mergeById(journal.entries, raw.journal && raw.journal.entries);
+    const b = mergeById(log.blocks, raw.log && raw.log.blocks);
+    const r = mergeById(settings.rules, raw.settings && raw.settings.rules);
+    journal.entries = j.merged.sort((x, y) => x.at - y.at);
+    log.blocks = b.merged.sort((x, y) => x.end - y.end);
+    settings.rules = r.merged;
+    saveJournal(); saveLog(); saveSettings(); renderAll();
+    $('dataStatus').textContent = 'Imported ' + j.added + ' new entries and ' + b.added + ' new blocks. Existing data was kept.';
+  } catch (e) {
+    $('dataStatus').textContent = "That file couldn't be read as a Focus Desk export. Choose a file made with the Export button.";
+  }
+}
+$('exportBtn').onclick = exportData;
+$('importBtn').onclick = () => $('importFile').click();
+$('importFile').addEventListener('change', async () => {
+  const f = $('importFile').files[0];
+  if (f) await importData(f);
+  $('importFile').value = ''; // so choosing the same file again still fires change
+});
 
 /* ---------- deck controls ---------- */
 $('startBtn').onclick = startFocus;

@@ -112,8 +112,12 @@ JavaScript are inline, and it borrows only the site header, footer, fonts
 and colour tokens from `/styles.css`.
 
 - **Data** lives in each visitor's own browser (localStorage keys starting
-  `focusdesk:`). There's no server, so nothing to back up, and you can't
-  see anyone's data.
+  `focusdesk:`). There's no server, and you can't see anyone's data.
+- **Export / import** (Settings → Your data): export writes
+  `focus-desk-YYYY-MM-DD.json`, readable times and tag labels plus the raw
+  state, ready to hand to Claude. Import only adds records whose `id`
+  isn't already there, so re-importing a file is harmless. Use it as a
+  backup, or to move data between browsers.
 - **Colours**: the token block at the top of its `<style>` maps the app's
   names (`--ink`, `--phase`, …) onto the site palette. The break state
   inverts the timer panel; that's the `body[data-phase="break"] .deck`
