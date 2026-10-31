@@ -124,6 +124,13 @@ and colour tokens from `/styles.css`.
   rule.
 - **Copy** (break ideas, if-then defaults, desk-setup tips) is in plain
   arrays near the top of the script: `BREAKS`, `DEFAULT_RULES`, `SETUP`.
+- **Distraction reasons** are the `TAGS` array: `label` shows in the main
+  journal, `short` on the mini window's chips. A new reason also wants a
+  line in the `advice` map in `renderWeek()`.
+- **Streak** (header button → panel) is computed by `computeStreak()`, a
+  pure function over `log.blocks` with no stored state of its own. Rules: a
+  day counts when a block was saved; one missed day is repaired by 2+
+  completed blocks the next day.
 
 ## Change colors or fonts
 

@@ -197,6 +197,43 @@ body[data-phase="idle"] .rule .kw{color:var(--muted)}
 .settings .inline{flex-direction:row;align-items:center;gap:8px;color:var(--ink)}
 .data-row{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:center;gap:10px;border-top:1px solid var(--line);padding-top:12px}
 .data-status{font-size:13px;color:var(--muted)}
+
+/* Press feedback: every button visibly reacts. Reduced motion keeps the colour and text changes, drops scaling. */
+.btn,.tag,.tog{transition:filter 80ms ease-out}
+.btn:active,.tag:active,.tog:active{filter:brightness(.82)}
+@media (prefers-reduced-motion:no-preference){
+  .btn,.tag,.tog{transition:transform 80ms ease-out,filter 80ms ease-out}
+  .btn:active,.tag:active,.tog:active{transform:scale(.96)}
+  .pop{animation:pop .3s ease-out}
+  .entry{transition:background-color .6s}
+}
+@keyframes pop{40%{transform:scale(1.5)}}
+.btn.flash-ok{background:var(--ok);border-color:var(--ok);color:var(--bg)}
+#repCount{display:inline-block}
+.paused-pill{color:var(--phase);border-color:var(--phase);margin-left:8px;vertical-align:1px}
+.entry.fresh{background:var(--phase-soft);box-shadow:inset 3px 0 0 var(--phase)}
+.pill.idea{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+
+/* Mini window: reason chips and the hint line under its log form */
+.mini-tags{display:flex;flex-wrap:wrap;gap:4px}
+.mini-tags .tag{font-size:11px;padding:2px 8px}
+.mini-hint{font-size:12px;color:var(--muted)}
+
+/* Streak panel + heatmap (square cells, like every other corner on the site) */
+.streak-panel{background:var(--panel);border:1px solid var(--line);padding:14px 16px;display:flex;flex-direction:column;gap:12px}
+.heat-scroll{overflow-x:auto;padding-bottom:4px}
+.heat{display:grid;grid-template-columns:auto repeat(26,11px);grid-template-rows:auto repeat(7,11px);gap:3px;width:max-content}
+.heat .m{font-size:10px;line-height:1;color:var(--muted);white-space:nowrap;align-self:end}
+.heat .w{font-size:10px;line-height:11px;color:var(--muted);padding-right:4px}
+.cell{display:block;width:11px;height:11px;background:var(--line)}
+.cell.l1{background:color-mix(in srgb,var(--focus) 30%,var(--line))}
+.cell.l2{background:color-mix(in srgb,var(--focus) 55%,var(--line))}
+.cell.l3{background:color-mix(in srgb,var(--focus) 80%,var(--line))}
+.cell.l4{background:var(--focus)}
+.cell.rep{background:transparent;outline:1px dashed var(--focus);outline-offset:-1px}
+.heat-legend{display:flex;align-items:center;flex-wrap:wrap;gap:3px;font-size:11px;color:var(--muted)}
+.heat-legend .gap{width:10px}
+.streak-status{font-size:14px}
 </style>
 </head>
 <body>
@@ -220,6 +257,7 @@ body[data-phase="idle"] .rule .kw{color:var(--muted)}
     <span class="spacer"></span>
     <span class="keys"><kbd>Space</kbd> start / pause &nbsp; <kbd>D</kbd> log a distraction</span>
     <button class="btn small" id="pipBtn" type="button" hidden>Pop out mini timer</button>
+    <button class="btn small" id="streakBtn" type="button" aria-expanded="false" aria-controls="streak">Streak</button>
     <button class="btn small" id="settingsBtn" aria-expanded="false" aria-controls="settings">Settings</button>
   </header>
 
@@ -240,11 +278,20 @@ body[data-phase="idle"] .rule .kw{color:var(--muted)}
     </div>
   </div>
 
+  <section class="streak-panel" id="streak" aria-labelledby="streakH" hidden>
+    <div class="sec-h"><h2 id="streakH">Streak</h2><span class="legend">A day counts when you save a block</span></div>
+    <div class="stats" id="streakStats"></div>
+    <div class="heat-scroll"><div class="heat" id="heat" role="img"></div></div>
+    <div class="heat-legend" aria-hidden="true">Less <i class="cell"></i><i class="cell l1"></i><i class="cell l2"></i><i class="cell l3"></i><i class="cell l4"></i> More<span class="gap"></span><i class="cell rep"></i> Repaired</div>
+    <p class="streak-status" id="streakStatus"></p>
+    <p class="why">Missed a day? Finish 2 blocks the next day and it's repaired: the streak carries on across it, though the repaired day itself doesn't add to the count.</p>
+  </section>
+
   <div class="grid">
     <div class="col">
       <section class="deck" id="deck" aria-label="Current block">
         <div class="deck-top">
-          <span class="phase-label" id="phaseLabel">Ready</span>
+          <span><span class="phase-label" id="phaseLabel">Ready</span><span class="pill paused-pill" id="pausedPill" hidden>Paused</span></span>
           <span class="block-count" id="blockCount"></span>
         </div>
         <div class="alarm" id="alarm" role="alert" hidden>
@@ -406,14 +453,29 @@ const now = () => Date.now();
 const IDLE_TITLE = 'Focus Desk — David Okunfolami';
 const mkId = () => now().toString(36) + Math.random().toString(36).slice(2,7);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+const plural = (n, w) => n + ' ' + w + (n === 1 ? '' : 's');
+/* Brief confirmation on a button: swap its label (and add a class), then restore.
+   Timers run on the button's own window: the main window is often hidden behind
+   other apps while the mini window is in front, and hidden windows throttle timers. */
+function flash(btn, text, ms, cls){
+  if (!btn) return;
+  const win = btn.ownerDocument.defaultView || window;
+  if (!btn.dataset.flash) btn.dataset.label = btn.textContent;
+  btn.dataset.flash = '1'; btn.textContent = text; if (cls) btn.classList.add(cls);
+  win.clearTimeout(btn._flashT);
+  btn._flashT = win.setTimeout(() => { btn.textContent = btn.dataset.label; delete btn.dataset.flash; if (cls) btn.classList.remove(cls); renderPip(); }, ms);
+}
+function pop(node){ node.classList.remove('pop'); void node.offsetWidth; node.classList.add('pop'); }
 
 /* ---------- content ---------- */
 const TAGS = [
-  {id:'autopilot', label:'Autopilot', hint:'Caught it. Re-read your last sentence and carry on.'},
-  {id:'bored', label:'Bored', hint:'Make it active. Explain the idea out loud from memory, or write the code yourself.'},
-  {id:'effort', label:"Don't want to think", hint:"That's the effort cost talking, and it peaks right after you finish something. Skip the reward for now: read the next problem and write its first line. The reward is your break."},
-  {id:'stuck', label:'Stuck', hint:'Shrink it. Write down the next smallest step and do only that.'},
-  {id:'task', label:'Remembered a task', hint:'Parked. It will be waiting for you at the break.'}
+  {id:'autopilot', label:'Autopilot', short:'Habit', hint:'Caught it. Re-read your last sentence and carry on.'},
+  {id:'bored', label:'Bored', short:'Bored', hint:'Make it active. Explain the idea out loud from memory, or write the code yourself.'},
+  {id:'effort', label:"Don't want to think", short:'Effort', hint:"That's the effort cost talking, and it peaks right after you finish something. Skip the reward for now: read the next problem and write its first line. The reward is your break."},
+  {id:'stuck', label:'Stuck', short:'Stuck', hint:'Shrink it. Write down the next smallest step and do only that.'},
+  {id:'task', label:'Remembered a task', short:'Task', hint:'Parked. It will be waiting for you at the break.'},
+  /* Masicampo & Baumeister (2011): a specific plan for an unfinished goal stopped it intruding on an unrelated task; planning without specifics didn't. */
+  {id:'idea', label:'New idea', short:'Idea', hint:"Write the idea plus one next step and when you'll do it (e.g. 'fix button feedback, at the break'). A specific plan is what lets your brain drop it. It's parked for your break."}
 ];
 const CHECKS = [
   {id:'phone', label:'Phone in another room'},
@@ -481,6 +543,54 @@ function dayLabel(t){
   return new Date(t).toLocaleDateString([], {weekday:'short', day:'numeric', month:'short'});
 }
 const todaysBlocks = () => log.blocks.filter(b => dayKey(b.end) === dayKey(now()));
+
+/* ---------- streak ----------
+   Pure: everything comes from log.blocks, so existing history counts. A day is active when
+   at least one block was saved that day (local date of block.end). A single missed day is
+   repaired when the next day has 2+ completed blocks: it bridges the streak but adds nothing.
+   Today without a block yet doesn't break anything, so the count starts from yesterday.
+   Silverman & Barasch (2023): a visible streak keeps people going, a broken one costs
+   engagement, less so when it can be repaired. Hence repair, longest and total days. */
+function computeStreak(blocks, todayDate){
+  const y = todayDate.getFullYear(), mo = todayDate.getMonth(), da = todayDate.getDate();
+  const keyAt = off => dayKey(new Date(y, mo, da + off, 12).getTime()); // noon: safe across DST changes
+  const noon0 = new Date(y, mo, da, 12).getTime();
+  const days = new Map();
+  let first = 0;
+  for (const b of blocks || []){
+    if (!b || typeof b.end !== 'number' || !isFinite(b.end)) continue;
+    const e = new Date(b.end);
+    const off = Math.round((new Date(e.getFullYear(), e.getMonth(), e.getDate(), 12).getTime() - noon0) / 864e5);
+    if (off > 0) continue; // a device clock set wrong; ignore future days
+    const k = dayKey(b.end), d = days.get(k) || {min:0, blocks:0, completed:0, repaired:false};
+    d.min += b.focusedMin || 0; d.blocks += 1; if (b.completed) d.completed += 1;
+    days.set(k, d);
+    if (off < first) first = off;
+  }
+  const info = off => days.get(keyAt(off));
+  const active = off => { const d = info(off); return !!d && d.blocks > 0; };
+  const completed = off => { const d = info(off); return d ? d.completed : 0; };
+  for (let off = first + 1; off < 0; off++){
+    if (!active(off) && active(off - 1) && completed(off + 1) >= 2) days.set(keyAt(off), {min:0, blocks:0, completed:0, repaired:true});
+  }
+  const repaired = off => { const d = info(off); return !!d && d.repaired; };
+  let run = 0, longest = 0;
+  for (let off = first; off <= 0; off++){
+    if (active(off)) longest = Math.max(longest, ++run);
+    else if (!repaired(off) && off < 0) run = 0;
+  }
+  let current = 0;
+  for (let off = active(0) ? 0 : -1; off >= first; off--){
+    if (active(off)) current++;
+    else if (!repaired(off)) break;
+  }
+  const monthPrefix = y + '-' + (mo + 1) + '-';
+  let activeDays = 0, thisMonth = 0;
+  days.forEach((d, k) => { if (d.blocks > 0){ activeDays++; if (k.startsWith(monthPrefix)) thisMonth++; } });
+  // yesterday missed, the day before active, and today can still repair it: completed blocks still needed
+  const repairNeed = !active(-1) && !repaired(-1) && active(-2) && completed(0) < 2 ? 2 - completed(0) : 0;
+  return {current, longest, activeDays, thisMonth, days, todayActive:active(0), repairNeed};
+}
 
 /* ---------- sound ---------- */
 let actx = null;
@@ -607,24 +717,27 @@ function renderClock(){
 }
 
 /* ---------- floating mini timer (Document Picture-in-Picture) ---------- */
-let pipWin = null, pipTick = null;
+let pipWin = null, pipTick = null, pipTag = null, pipHintTimer = null;
 const pipSupported = (() => { try { return 'documentPictureInPicture' in window && window.top === window; } catch (e) { return false; } })();
 async function openPip(){
   if (pipWin) return;
   ensureAudio();
-  try { pipWin = await window.documentPictureInPicture.requestWindow({width:320, height:230}); }
+  // 380 tall: fits the reason chips plus a four-line hint (measured: ~350px) with room for wider system fonts
+  try { pipWin = await window.documentPictureInPicture.requestWindow({width:320, height:380}); }
   catch (e) { pipWin = null; return; }
   const d = pipWin.document;
   document.querySelectorAll('style, link[rel="stylesheet"]').forEach(n => d.head.appendChild(n.cloneNode(true)));
   d.title = 'Focus Desk';
   const wrap = d.createElement('div'); wrap.className = 'mini';
   wrap.innerHTML =
-    '<div class="mini-top"><span class="phase-label" id="mPhase"></span><button class="btn quiet small" id="mBack" type="button">Back to desk</button></div>' +
+    '<div class="mini-top"><span><span class="phase-label" id="mPhase"></span><span class="pill paused-pill" id="mPaused" hidden>Paused</span></span><button class="btn quiet small" id="mBack" type="button">Back to desk</button></div>' +
     '<div class="alarm" id="mAlarm" hidden><strong id="mAlarmText"></strong><button class="btn small" id="mStop" type="button">Stop</button></div>' +
     '<div class="clock" id="mClock"></div>' +
     '<div class="mini-goal" id="mGoal"></div>' +
     '<div class="row"><button class="btn primary small" id="mMain" type="button"></button><button class="btn small" id="mRep" type="button">✓ Finished one</button></div>' +
-    '<form id="mLog" autocomplete="off"><input class="field" id="mInput" placeholder="Urge to switch? Log it" aria-label="Log a distraction"><button class="btn small" type="submit">Log</button></form>';
+    '<form id="mLog" autocomplete="off"><input class="field" id="mInput" placeholder="Urge to switch? Log it" aria-label="Log a distraction"><button class="btn small" type="submit">Log</button></form>' +
+    '<div class="mini-tags" id="mTags" role="group" aria-label="Why the urge?"></div>' +
+    '<p class="mini-hint" id="mHint" role="status" hidden></p>';
   d.body.appendChild(wrap);
   const g = id => d.getElementById(id);
   g('mMain').onclick = () => {
@@ -632,15 +745,19 @@ async function openPip(){
     else if (T.phase === 'focus' || T.phase === 'break') (T.running ? pause() : resume());
     else { try { window.focus(); } catch (e) {} }
   };
-  g('mRep').onclick = () => $('repBtn').click();
+  /* Feedback is drawn here, in the mini window, not on the hidden main one. */
+  g('mRep').onclick = () => { if (finishRep()) flash(g('mRep'), '✓ +1', 900, 'flash-ok'); };
   g('mStop').onclick = stopAlarm;
   g('mBack').onclick = () => { try { window.focus(); } catch (e) {} };
   g('mLog').addEventListener('submit', ev => {
     ev.preventDefault(); const t = g('mInput').value.trim(); if (!t) return;
-    logDistraction(t, null); g('mInput').value = '';
-    const ph = g('mInput').placeholder; g('mInput').placeholder = 'Logged. Back to it.';
-    setTimeout(() => { if (pipWin) g('mInput').placeholder = ph; }, 2500);
+    const tag = TAGS.find(x => x.id === pipTag);
+    logDistraction(t, pipTag); g('mInput').value = ''; pipTag = null; renderPipTags();
+    flash(g('mLog').querySelector('button[type="submit"]'), '✓ Logged', 1200);
+    const h = g('mHint'); h.textContent = tag ? tag.hint : 'Logged. Back to it.'; h.hidden = false;
+    pipWin.clearTimeout(pipHintTimer); pipHintTimer = pipWin.setTimeout(() => { h.hidden = true; }, 6000);
   });
+  pipTag = null; renderPipTags();
   ['pointerdown', 'keydown'].forEach(ev => d.addEventListener(ev, e => { if (e.target.id !== 'mStop' && !$('alarm').hidden && now() - alarmArmedAt > 400) stopAlarm(); }, true));
   /* The mini window stays visible, so its timer keeps the alarm on time even when the main window is buried. */
   pipTick = pipWin.setInterval(tick, 250);
@@ -652,25 +769,42 @@ function renderPip(){
   if (!pipWin) return;
   const d = pipWin.document, g = id => d.getElementById(id);
   if (!g('mClock')) return;
-  const p = T.phase || 'idle';
+  const p = T.phase || 'idle', paused = !T.running && (p === 'focus' || p === 'break');
   d.body.dataset.phase = p;
-  g('mPhase').textContent = $('phaseLabel').textContent;
+  d.querySelector('.mini').classList.toggle('paused', paused);
+  g('mPhase').textContent = $('phaseLabel').textContent; g('mPaused').hidden = !paused;
   g('mClock').textContent = (p === 'focus' || p === 'break') ? fmt(remaining()) : p === 'wrap' ? 'Done' : fmt(settings.focusMin * 60000);
   const goal = p === 'break' ? 'Break: step away from the screen' : p === 'wrap' ? 'Write your resume note on the desk' : (T.block && T.block.goal) || ($('goal').value.trim() || 'No goal set');
   g('mGoal').textContent = goal;
   g('mMain').textContent = p === 'idle' ? 'Start block' : (p === 'focus' || p === 'break') ? (T.running ? 'Pause' : 'Resume') : 'Open desk';
   g('mRep').hidden = p !== 'focus';
-  g('mLog').hidden = p === 'break';
+  if (!g('mRep').dataset.flash) g('mRep').textContent = '✓ Finished one (' + ((T.block && T.block.reps) || 0) + ')';
+  g('mLog').hidden = g('mTags').hidden = p === 'break';
+  if (p === 'break' || !$('alarm').hidden) g('mHint').hidden = true; // the alarm takes the space when it rings
   g('mAlarm').hidden = $('alarm').hidden; g('mAlarmText').textContent = $('alarmText').textContent;
+}
+function renderPipTags(){
+  if (!pipWin) return;
+  const d = pipWin.document, box = d.getElementById('mTags');
+  if (!box) return;
+  box.textContent = '';
+  TAGS.forEach(t => {
+    const b = d.createElement('button'); b.className = 'tag'; b.type = 'button'; b.textContent = t.short; b.title = t.label;
+    b.setAttribute('aria-pressed', pipTag === t.id ? 'true' : 'false');
+    b.onclick = () => { pipTag = pipTag === t.id ? null : t.id; renderPipTags(); d.getElementById('mInput').focus(); };
+    box.appendChild(b);
+  });
 }
 if (pipSupported) { $('pipBtn').hidden = false; $('pipNote').hidden = true; $('pipBtn').onclick = openPip; }
 function renderTimer(){
   const p = T.phase || 'idle';
   document.body.dataset.phase = p;
   $('vIdle').hidden = p !== 'idle'; $('vRun').hidden = !(p === 'focus' || p === 'break'); $('vWrap').hidden = p !== 'wrap';
-  $('deck').classList.toggle('paused', !T.running && (p === 'focus' || p === 'break'));
-  const labels = {idle:'Ready', focus:T.running ? 'Focusing' : 'Paused', break:T.running ? (T.longBreak ? 'Long break' : 'Break') : 'Break paused', wrap:'Wrap up'};
-  $('phaseLabel').textContent = labels[p];
+  const paused = !T.running && (p === 'focus' || p === 'break');
+  $('deck').classList.toggle('paused', paused);
+  // the Paused pill carries the paused state, so the label just names the phase
+  const labels = {idle:'Ready', focus:T.running ? 'Focusing' : 'Focus', break:T.longBreak ? 'Long break' : 'Break', wrap:'Wrap up'};
+  $('phaseLabel').textContent = labels[p]; $('pausedPill').hidden = !paused;
   const tb = todaysBlocks(), done = tb.filter(b => b.completed).length, mins = tb.reduce((a, b) => a + (b.focusedMin || 0), 0);
   $('blockCount').textContent = done + (done === 1 ? ' block' : ' blocks') + ' · ' + mins + ' min focused today';
 
@@ -739,7 +873,7 @@ function renderBreak(){
 }
 
 /* ---------- journal ---------- */
-let pickedTag = null, filter = 'open', hintTimer = null;
+let pickedTag = null, filter = 'open', hintTimer = null, freshId = null, freshTimer = null;
 function renderTags(){
   const box = $('tags'); box.textContent = '';
   TAGS.forEach(t => {
@@ -749,7 +883,7 @@ function renderTags(){
   });
 }
 function entryRow(e){
-  const row = el('div', 'entry' + (e.done ? ' done' : ''));
+  const row = el('div', 'entry' + (e.done ? ' done' : '') + (e.id === freshId ? ' fresh' : ''));
   const cb = el('input'); cb.type = 'checkbox'; cb.checked = !!e.done; cb.setAttribute('aria-label', 'Dealt with');
   cb.onchange = () => { e.done = cb.checked; saveJournal(); renderJournal(); if (T.phase === 'break') renderBreak(); };
   const txt = el('div', 'txt', e.text);
@@ -778,12 +912,16 @@ function renderJournal(){
 }
 function logDistraction(text, tagId){
   const inBlock = T.phase === 'focus' && T.block;
-  journal.entries.push({id:mkId(), at:now(), text, tag:tagId, blockId:inBlock ? T.block.id : null, done:false});
+  const id = mkId();
+  journal.entries.push({id, at:now(), text, tag:tagId, blockId:inBlock ? T.block.id : null, done:false});
   saveJournal();
   const tag = TAGS.find(t => t.id === tagId);
   $('hint').textContent = tag ? tag.hint : 'Logged. Back to it.'; $('hint').hidden = false;
   clearTimeout(hintTimer); hintTimer = setTimeout(() => { $('hint').hidden = true; }, 9000);
+  freshId = id; // highlights the new row as it renders
   renderJournal(); renderWeek();
+  clearTimeout(freshTimer);
+  freshTimer = setTimeout(() => { freshId = null; document.querySelectorAll('.entry.fresh').forEach(r => r.classList.remove('fresh')); }, 1500);
   return inBlock;
 }
 $('capture').addEventListener('submit', ev => {
@@ -791,6 +929,7 @@ $('capture').addEventListener('submit', ev => {
   const text = $('jInput').value.trim(); if (!text) return;
   const inBlock = logDistraction(text, pickedTag);
   $('jInput').value = ''; pickedTag = null; renderTags();
+  flash($('capture').querySelector('button[type="submit"]'), '✓ Logged', 1200);
   if (inBlock) $('jInput').blur();
 });
 $('tabOpen').onclick = () => { filter = 'open'; renderJournal(); };
@@ -852,7 +991,8 @@ function renderWeek(){
     bored:'Most urges come from boredom. Swap passive reading for active recall or building.',
     stuck:'Most urges come from being stuck. Break tasks into smaller steps before you start a block.',
     effort:'Most urges come right after effort. Press Finished one, then start the next problem before the urge gets a vote.',
-    task:'Most urges are remembered tasks. Do the brain dump before each block.'};
+    task:'Most urges are remembered tasks. Do the brain dump before each block.',
+    idea:'Most urges are new ideas. Keep capturing them with a next step. If they keep coming, add a 5-minute "idea review" to the start of your breaks.'};
   $('topUrge').textContent = top ? 'Most common reason this week: ' + TAGS.find(t => t.id === top[0]).label.toLowerCase() + ' (' + top[1] + '). ' + advice[top[0]] : 'Tag your distractions and this will show your most common reason, with what to change.';
 }
 
@@ -957,13 +1097,17 @@ const REP_MSGS = [
   'Nice. Write the next function signature before you think about whether you want to.'
 ];
 let repTimer = null;
-$('repBtn').onclick = () => {
-  if (!T.block) return;
+/* Shared by the main and mini "Finished one" buttons; each button flashes itself. */
+function finishRep(){
+  if (!T.block) return false;
   T.block.reps = (T.block.reps || 0) + 1; saveTimer();
-  $('repCount').textContent = T.block.reps;
+  $('repCount').textContent = T.block.reps; pop($('repCount'));
   const m = $('repMsg'); m.textContent = REP_MSGS[(T.block.reps - 1) % REP_MSGS.length]; m.hidden = false;
   clearTimeout(repTimer); repTimer = setTimeout(() => { m.hidden = true; }, 12000);
-};
+  renderPip();
+  return true;
+}
+$('repBtn').onclick = () => { if (finishRep()) flash($('repBtn'), '✓ +1', 900, 'flash-ok'); };
 $('stopAlarm').onclick = stopAlarm;
 $('testAlarm').onclick = () => { ensureAudio(); startAlarm('test'); };
 $('sVol').onchange = () => { settings.volume = $('sVol').value; saveSettings(); };
@@ -982,10 +1126,57 @@ document.addEventListener('keydown', e => {
   } else if (e.key === 'd' || e.key === 'D'){ e.preventDefault(); $('jInput').focus(); }
 });
 
+/* ---------- streak panel ---------- */
+function renderStreak(){
+  const today = new Date(), s = computeStreak(log.blocks, today);
+  $('streakBtn').textContent = s.current ? s.current + '-day streak' : 'Streak';
+  const stats = $('streakStats'); stats.textContent = '';
+  [[s.current, 'Current streak'], [s.longest, 'Longest streak'], [s.activeDays, 'Active days (all time)'], [s.thisMonth, 'Active days this month']].forEach(([v, l]) => {
+    const st = el('div', 'stat'); st.append(el('b', null, String(v)), el('span', null, l)); stats.appendChild(st);
+  });
+  // 26 weeks: columns are weeks, rows Mon–Sun, ending with the current week
+  const heat = $('heat'); heat.textContent = '';
+  const dow = (today.getDay() + 6) % 7, todayIdx = 25 * 7 + dow;
+  const dateAt = idx => new Date(today.getFullYear(), today.getMonth(), today.getDate() - todayIdx + idx, 12);
+  ['Mon', '', 'Wed', '', 'Fri', '', ''].forEach((t, r) => {
+    if (!t) return; const n = el('span', 'w', t); n.style.gridColumn = 1; n.style.gridRow = r + 2; heat.appendChild(n);
+  });
+  const starts = [];
+  for (let w = 0; w < 26; w++){ if (w === 0 || dateAt(w * 7).getMonth() !== dateAt((w - 1) * 7).getMonth()) starts.push(w); }
+  if (starts.length > 1 && starts[1] < 3) starts.shift(); // first label would collide with the next one
+  starts.forEach(w => {
+    const n = el('span', 'm', dateAt(w * 7).toLocaleDateString([], {month:'short'}));
+    n.style.gridColumn = w + 2; n.style.gridRow = 1; heat.appendChild(n);
+  });
+  let inRange = 0;
+  for (let idx = 0; idx <= todayIdx; idx++){
+    const d = dateAt(idx), info = s.days.get(dayKey(d.getTime())), c = el('i', 'cell');
+    const label = d.toLocaleDateString([], {weekday:'short', day:'numeric', month:'short'});
+    if (info && info.repaired){ c.classList.add('rep'); c.title = label + ': repaired'; }
+    else if (info){
+      inRange++;
+      const lv = info.min >= 120 ? 4 : info.min >= 60 ? 3 : info.min >= 25 ? 2 : 1; // any active day shows, even under a minute
+      c.classList.add('l' + lv); c.title = label + ': ' + info.min + ' min, ' + plural(info.blocks, 'block');
+    } else c.title = label + ': no blocks';
+    c.style.gridColumn = Math.floor(idx / 7) + 2; c.style.gridRow = (idx % 7) + 2;
+    heat.appendChild(c);
+  }
+  heat.setAttribute('aria-label', 'Focus over the last 26 weeks: ' + plural(inRange, 'active day') + '.');
+  // never blaming: say what keeps or restarts the streak
+  let msg;
+  if (!s.activeDays) msg = 'Your streak starts with your next block.';
+  else if (s.repairNeed) msg = s.repairNeed === 2 ? 'Missed yesterday. Finish 2 blocks today to repair it.' : 'Missed yesterday. Finish 1 more block today to repair it.';
+  else if (!s.todayActive && s.current) msg = 'Finish a block today to keep your ' + s.current + '-day streak.';
+  else if (!s.current) msg = 'New streak starts with your next block. Longest: ' + plural(s.longest, 'day') + '.';
+  else msg = "Today counts. You're on a " + s.current + '-day streak.';
+  $('streakStatus').textContent = msg;
+}
+$('streakBtn').onclick = () => { const s = $('streak'); s.hidden = !s.hidden; $('streakBtn').setAttribute('aria-expanded', String(!s.hidden)); };
+
 /* ---------- boot ---------- */
-function renderAll(){ renderTimer(); renderTags(); renderJournal(); renderRules(); renderWeek(); renderSetup(); fillSettings(); }
+function renderAll(){ renderTimer(); renderTags(); renderJournal(); renderRules(); renderWeek(); renderSetup(); renderStreak(); fillSettings(); }
 renderAll();
-document.addEventListener('visibilitychange', () => { if (!document.hidden) { tick(); renderWeek(); } });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { tick(); renderWeek(); renderStreak(); } });
 })();
 </script>
 
