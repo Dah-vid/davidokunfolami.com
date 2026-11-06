@@ -127,10 +127,34 @@ and colour tokens from `/styles.css`.
 - **Distraction reasons** are the `TAGS` array: `label` shows in the main
   journal, `short` on the mini window's chips. A new reason also wants a
   line in the `advice` map in `renderWeek()`.
-- **Streak** (header button → panel) is computed by `computeStreak()`, a
-  pure function over `log.blocks` with no stored state of its own. Rules: a
-  day counts when a block was saved; one missed day is repaired by 2+
-  completed blocks the next day.
+- **Focus days** (header button → panel) shows the active-day counts and a
+  heatmap from `computeStreak()`, a pure function over `log.blocks`. Streak
+  numbers moved to Habits on purpose.
+- **Subjects → Habits**: a saved block with a subject (NeetCode, Build,
+  System design, Textbook) writes into `habits:entries`: 25+ focused
+  minutes = Full, 10+ = Minimum, less = nothing. See `logToHabits()`.
+- **Wind-down / morning**: from the wind-down time (Settings, default 21:30)
+  until 04:00 the idle view says "Rest now" and caps a block at 25 min;
+  05:00–09:00 it leads with the resume note. Labels only, nothing blocked.
+
+## Habits (`habits/`)
+
+Unlisted (`noindex`, not in the nav), one self-contained file like Focus
+Desk, same tokens. Rule of the page: streaks are a side effect of honest
+logging, so honest options are as easy as Full.
+
+- **Storage** is shared with Focus Desk under `habits:` keys:
+  `habits:habits` (definitions), `habits:entries` (one entry per habit per
+  day, best one wins: Full > Minimum > Reserve), `habits:settings` (the
+  subject → habit mapping, editable in Settings).
+- **Honesty rules**, all in `blockedReason()`: past days need a reason and
+  lock 48 hours after they end; Reserves are capped per habit per week;
+  Bedtime logs only 9pm–3am (and 1am still counts as the night before);
+  habits fed by Focus Desk can't be marked Full by hand.
+- **Streak maths** is `computeStreaks()`, pure, between the `streaks:begin`
+  / `streaks:end` markers so it can be run in node.
+- **Edit habits** in its Settings panel (rename, reorder, archive, targets);
+  archiving keeps the history.
 
 ## Change colors or fonts
 

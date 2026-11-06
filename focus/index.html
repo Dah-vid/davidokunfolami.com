@@ -230,10 +230,12 @@ body[data-phase="idle"] .rule .kw{color:var(--muted)}
 .cell.l2{background:color-mix(in srgb,var(--focus) 55%,var(--line))}
 .cell.l3{background:color-mix(in srgb,var(--focus) 80%,var(--line))}
 .cell.l4{background:var(--focus)}
-.cell.rep{background:transparent;outline:1px dashed var(--focus);outline-offset:-1px}
 .heat-legend{display:flex;align-items:center;flex-wrap:wrap;gap:3px;font-size:11px;color:var(--muted)}
 .heat-legend .gap{width:10px}
 .streak-status{font-size:14px}
+.streak-status a,.subject-row a{color:var(--ink)}
+.quiet-banner{font-size:14px;color:var(--muted);border-left:3px solid var(--line);padding:6px 12px}
+.subject-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
 </style>
 </head>
 <body>
@@ -257,7 +259,7 @@ body[data-phase="idle"] .rule .kw{color:var(--muted)}
     <span class="spacer"></span>
     <span class="keys"><kbd>Space</kbd> start / pause &nbsp; <kbd>D</kbd> log a distraction</span>
     <button class="btn small" id="pipBtn" type="button" hidden>Pop out mini timer</button>
-    <button class="btn small" id="streakBtn" type="button" aria-expanded="false" aria-controls="streak">Streak</button>
+    <button class="btn small" id="streakBtn" type="button" aria-expanded="false" aria-controls="streak">Focus days</button>
     <button class="btn small" id="settingsBtn" aria-expanded="false" aria-controls="settings">Settings</button>
   </header>
 
@@ -267,6 +269,8 @@ body[data-phase="idle"] .rule .kw{color:var(--muted)}
     <label for="sLong">Long break, every 4th (min)<input class="field" id="sLong" type="number" min="5" max="45"></label>
     <label for="sVol">Alarm volume<select class="field" id="sVol"><option value="quiet">Quiet</option><option value="normal">Normal</option><option value="loud">Loud</option></select></label>
     <label class="inline" for="sSound"><input id="sSound" type="checkbox"> Alarm when a block or break ends</label>
+    <label for="sWind">Wind-down from<input class="field" id="sWind" type="time"></label>
+    <label for="sFirst">First block at<input class="field" id="sFirst" type="time"></label>
     <div><button class="btn small" id="testAlarm" type="button">Test alarm</button></div>
     <p class="pip-note" id="pipNote">The floating mini timer needs Chrome or Edge. In other browsers, keep this tab in a small window pinned on top instead (on Windows, PowerToys "Always On Top": Win + Ctrl + T).</p>
     <div class="data-row">
@@ -279,12 +283,11 @@ body[data-phase="idle"] .rule .kw{color:var(--muted)}
   </div>
 
   <section class="streak-panel" id="streak" aria-labelledby="streakH" hidden>
-    <div class="sec-h"><h2 id="streakH">Streak</h2><span class="legend">A day counts when you save a block</span></div>
+    <div class="sec-h"><h2 id="streakH">Focus days</h2><span class="legend">A day counts when you save a block</span></div>
     <div class="stats" id="streakStats"></div>
     <div class="heat-scroll"><div class="heat" id="heat" role="img"></div></div>
-    <div class="heat-legend" aria-hidden="true">Less <i class="cell"></i><i class="cell l1"></i><i class="cell l2"></i><i class="cell l3"></i><i class="cell l4"></i> More<span class="gap"></span><i class="cell rep"></i> Repaired</div>
-    <p class="streak-status" id="streakStatus"></p>
-    <p class="why">Missed a day? Finish 2 blocks the next day and it's repaired: the streak carries on across it, though the repaired day itself doesn't add to the count.</p>
+    <div class="heat-legend" aria-hidden="true">Less <i class="cell"></i><i class="cell l1"></i><i class="cell l2"></i><i class="cell l3"></i><i class="cell l4"></i> More</div>
+    <p class="streak-status">Streaks live in <a href="/habits/">Habits →</a></p>
   </section>
 
   <div class="grid">
@@ -300,13 +303,19 @@ body[data-phase="idle"] .rule .kw{color:var(--muted)}
         </div>
 
         <div id="vIdle" class="col" style="gap:14px">
+          <p class="quiet-banner" id="windBanner" role="status" hidden></p>
           <div class="resume" id="resumeBox" hidden>
-            <span class="eyebrow">Pick up here</span>
+            <span class="eyebrow" id="resumeLabel">Pick up here</span>
             <p id="resumeText"></p>
           </div>
           <div>
             <label class="lbl" for="goal">This block I will…</label>
             <input class="field" id="goal" autocomplete="off" placeholder="e.g. Solve Valid Anagram, then explain it out loud">
+          </div>
+          <div class="subject-row">
+            <span class="eyebrow">Subject</span>
+            <div class="tags" id="subjects" role="group" aria-label="Subject, logs to Habits"></div>
+            <span class="why">25+ min logs Full in <a href="/habits/">Habits</a>, 10+ min logs Minimum.</span>
           </div>
           <div class="checks" id="checks" role="group" aria-label="Before you start"></div>
           <details class="dump" id="dumpBox">
@@ -331,6 +340,7 @@ body[data-phase="idle"] .rule .kw{color:var(--muted)}
         </div>
 
         <div id="vRun" class="col" style="gap:14px" hidden>
+          <span class="eyebrow" id="subjectNow" hidden></span>
           <p class="goal-now" id="goalNow"></p>
           <div class="clock" id="clock" role="timer" aria-live="off">25:00</div>
           <div class="ticks" id="ticks" aria-hidden="true"></div>
@@ -502,16 +512,22 @@ const DEFAULT_RULES = [
   {id:'r1', if:'I feel the pull to open a new tab', then:'I write it in the journal and re-read my last sentence'},
   {id:'r2', if:"I'm bored or just re-reading", then:'I close the material and explain it out loud from memory'},
   {id:'r3', if:"I'm stuck for more than five minutes", then:'I write the next smallest step and do only that'},
-  {id:'r4', if:'I just finished an exercise and want a reward', then:'I press Finished one, read the next problem and write its first line'}
+  {id:'r4', if:'I just finished an exercise and want a reward', then:'I press Finished one, read the next problem and write its first line'},
+  {id:'r5', if:'I wake up late', then:'I do one 25-minute block, log it as Minimum, and leave the streak alone'}
 ];
-const DEFAULTS = {focusMin:25, breakMin:5, longBreakMin:15, sound:true, volume:'normal', rules:DEFAULT_RULES, setup:{}, resume:null, nudgeSkip:0, seeded:['r4']};
+const DEFAULTS = {focusMin:25, breakMin:5, longBreakMin:15, sound:true, volume:'normal', rules:DEFAULT_RULES, setup:{}, resume:null, nudgeSkip:0, seeded:['r4', 'r5'],
+  windDown:'21:30', firstBlock:'05:50'};
+// plans added after launch are seeded once into existing settings; deleting one afterwards sticks
+const LATER_RULES = ['r4', 'r5'];
 function migrate(s){
   s = Object.assign({}, DEFAULTS, s);
-  const seen = Array.isArray(s.seeded) ? s.seeded : [];
-  if (!seen.includes('r4')){
-    if (!s.rules.some(r => r.id === 'r4')) s.rules = s.rules.concat(DEFAULT_RULES[3]);
-    s.seeded = seen.concat('r4');
-  }
+  let seen = Array.isArray(s.seeded) ? s.seeded : [];
+  LATER_RULES.forEach(id => {
+    if (seen.includes(id)) return;
+    if (!s.rules.some(r => r.id === id)) s.rules = s.rules.concat(DEFAULT_RULES.find(r => r.id === id));
+    seen = seen.concat(id);
+  });
+  s.seeded = seen;
   return s;
 }
 
@@ -543,6 +559,46 @@ function dayLabel(t){
   return new Date(t).toLocaleDateString([], {weekday:'short', day:'numeric', month:'short'});
 }
 const todaysBlocks = () => log.blocks.filter(b => dayKey(b.end) === dayKey(now()));
+
+/* ---------- link to Habits (/habits/) ----------
+   Same origin, so both pages share localStorage. Saving a block that has a subject writes an
+   entry into habits:entries: Full for 25+ focused minutes, Minimum for 10+, nothing below.
+   One entry per habit per day, the best one seen (Full beats Minimum). The subject → habit
+   mapping is edited on the Habits page (habits:settings). Works before Habits has ever been
+   opened: it picks the entries up when it is. */
+const SUBJECTS = [{id:'neetcode', label:'NeetCode'}, {id:'build', label:'Build'}, {id:'sysdesign', label:'System design'}, {id:'textbook', label:'Textbook'}];
+const DEFAULT_SUBJECT_MAP = {neetcode:'neetcode', build:'building', sysdesign:'sysdesign', textbook:'textbook'};
+const habitsGet = k => { try { const v = localStorage.getItem('habits:' + k); return v ? JSON.parse(v) : null; } catch (e) { return null; } };
+const habitsSet = (k, v) => { try { localStorage.setItem('habits:' + k, JSON.stringify(v)); } catch (e) {} };
+const ymd = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+const habitKind = min => min >= 25 ? 'full' : min >= 10 ? 'min' : null;
+const subjectHabit = subject => { const s = habitsGet('settings') || {}; return Object.assign({}, DEFAULT_SUBJECT_MAP, s.mapping || {})[subject] || null; };
+function logToHabits(block){
+  const kind = block.subject ? habitKind(block.focusedMin || 0) : null, habitId = kind && subjectHabit(block.subject);
+  if (!habitId) return;
+  const store = habitsGet('entries'), list = store && Array.isArray(store.entries) ? store.entries : [];
+  const day = ymd(new Date(block.end)), rank = k => ({full:3, min:2, reserve:1})[k] || 0;
+  const i = list.findIndex(e => e.habitId === habitId && e.day === day), ex = i >= 0 ? list[i] : null;
+  // keep what's there if it's better, or equal and already from a block
+  if (ex && (rank(ex.kind) > rank(kind) || (rank(ex.kind) === rank(kind) && ex.source === 'focusdesk'))) return;
+  const entry = {id:'fd-' + block.id, habitId, day, kind, at:block.end, source:'focusdesk', blockId:block.id, focusedMin:block.focusedMin};
+  if (ex && ex.note) entry.note = ex.note;
+  if (i >= 0) list[i] = entry; else list.push(entry);
+  habitsSet('entries', {entries:list});
+}
+
+/* ---------- time of day: wind-down and morning ----------
+   Labels only, nothing is blocked. Wind-down runs from the set time (default 21:30) to 04:00;
+   morning is 05:00–09:00. */
+const clockMins = hhmm => { const [h, m] = String(hhmm || '').split(':').map(Number); return isNaN(h) ? null : h * 60 + (m || 0); };
+const shortTime = hhmm => { const [h, m] = String(hhmm).split(':'); return Number(h) + ':' + m; };
+function dayMode(){
+  const d = new Date(), m = d.getHours() * 60 + d.getMinutes(), end = 240;
+  const start = clockMins(settings.windDown) ?? clockMins(DEFAULTS.windDown);
+  if (start <= end ? m >= start && m < end : m >= start || m < end) return 'wind';
+  if (m >= 300 && m < 540) return 'morning';
+  return '';
+}
 
 /* ---------- streak ----------
    Pure: everything comes from log.blocks, so existing history counts. A day is active when
@@ -640,9 +696,10 @@ function fmt(ms){ const s = Math.ceil(ms / 1000); return String(Math.floor(s / 6
 function startFocus(){
   ensureAudio(); stopAlarm(); $('repMsg').hidden = true;
   const goal = $('goal').value.trim();
-  const total = settings.focusMin * 60000;
+  const mins = dayMode() === 'wind' ? Math.min(settings.focusMin, 25) : settings.focusMin; // wind-down: short block only
+  const total = mins * 60000;
   T = Object.assign(T, {phase:'focus', running:true, total, endAt:now() + total, remaining:null,
-    block:{id:mkId(), start:now(), goal, planned:settings.focusMin}, focusMs:0, segStart:now()});
+    block:{id:mkId(), start:now(), goal, planned:mins, subject:T.subject || null}, focusMs:0, segStart:now()});
   saveTimer(); renderAll();
 }
 function pause(){
@@ -668,12 +725,14 @@ function saveWrap(goBreak){
   const note = $('resumeNote').value.trim();
   const b = T.block || {id:mkId(), start:now(), goal:'', planned:settings.focusMin};
   const distractions = journal.entries.filter(e => e.blockId === b.id).length;
-  log.blocks.push({id:b.id, start:b.start, end:now(), goal:b.goal, planned:b.planned,
-    focusedMin:Math.round((T.focusMs || 0) / 60000), completed:!!T.completed, distractions, reps:b.reps || 0});
+  const saved = {id:b.id, start:b.start, end:now(), goal:b.goal, planned:b.planned,
+    focusedMin:Math.round((T.focusMs || 0) / 60000), completed:!!T.completed, distractions, reps:b.reps || 0, subject:b.subject || null};
+  log.blocks.push(saved);
   saveLog();
+  logToHabits(saved);
   settings.resume = note ? {text:note, at:now()} : null; saveSettings();
   $('resumeNote').value = ''; $('goal').value = '';
-  T.lastBlockId = b.id; T.block = null; T.checks = {};
+  T.lastBlockId = b.id; T.block = null; T.checks = {}; T.subject = null; // a leftover subject would log the wrong habit
   if (goBreak){
     const n = todaysBlocks().filter(x => x.completed).length;
     const long = n > 0 && n % 4 === 0;
@@ -689,6 +748,7 @@ function endBreak(ring){
   T.phase = 'idle'; T.running = false; saveTimer(); renderAll();
   if (ring) startAlarm('break');
 }
+let lastMode = null; // so a page left open switches into wind-down / morning on its own
 function tick(){
   if (T.running && now() >= T.endAt){
     if (T.phase === 'focus') finishFocus(true);
@@ -696,6 +756,7 @@ function tick(){
     return;
   }
   if (T.phase === 'focus' || T.phase === 'break') renderClock();
+  else if (T.phase === 'idle' && dayMode() !== lastMode) renderTimer();
 }
 setInterval(tick, 250);
 
@@ -810,16 +871,22 @@ function renderTimer(){
 
   if (p === 'idle'){
     document.title = IDLE_TITLE;
-    const r = settings.resume;
+    const mode = dayMode(), r = settings.resume;
+    lastMode = mode;
     $('resumeBox').hidden = !r; if (r) $('resumeText').textContent = r.text;
+    $('resumeLabel').textContent = mode === 'morning' ? 'Morning block. Resume note:' : 'Pick up here';
+    $('windBanner').hidden = mode !== 'wind';
+    $('windBanner').textContent = 'Rest now. First block at ' + shortTime(settings.firstBlock || DEFAULTS.firstBlock) + '.';
     $('lenVal').textContent = settings.focusMin + ' min';
-    $('startBtn').textContent = 'Start ' + settings.focusMin + '-min block';
-    renderChecks(); renderNudge();
+    $('startBtn').textContent = mode === 'wind' ? 'Start anyway (short block)' : 'Start ' + settings.focusMin + '-min block';
+    renderChecks(); renderNudge(); renderSubjects();
   }
   if (p === 'focus' || p === 'break'){
     const isBreak = p === 'break';
     const g = isBreak ? (T.longBreak ? 'Long break. You have earned it.' : 'Break. Step away from the screen.') : (T.block && T.block.goal) || 'No goal set for this block';
     $('goalNow').textContent = g; $('goalNow').classList.toggle('empty', !isBreak && !(T.block && T.block.goal));
+    const sub = !isBreak && T.block && SUBJECTS.find(s => s.id === T.block.subject);
+    $('subjectNow').hidden = !sub; if (sub) $('subjectNow').textContent = sub.label + ' · logs to Habits';
     $('pauseBtn').textContent = T.running ? 'Pause' : 'Resume';
     $('endBtn').hidden = isBreak; $('skipBreakBtn').hidden = !isBreak;
     $('focusExtras').hidden = isBreak || !settings.rules.length; $('breakExtras').hidden = !isBreak;
@@ -832,10 +899,21 @@ function renderTimer(){
     const n = journal.entries.filter(e => T.block && e.blockId === T.block.id).length;
     const m = Math.round((T.focusMs || 0) / 60000);
     const r = (T.block && T.block.reps) || 0;
-    $('wrapSub').textContent = m + ' min focused, ' + (r ? r + (r === 1 ? ' exercise' : ' exercises') + ' finished, ' : '') + n + (n === 1 ? ' distraction' : ' distractions') + ' logged.' + (T.completed ? '' : ' Ending early is information, not failure. If it keeps happening, try a shorter block.');
+    // say up front what saving will write to Habits, so it's never a surprise
+    const sub = T.block && SUBJECTS.find(s => s.id === T.block.subject), k = habitKind(m);
+    const toHabits = !sub || !subjectHabit(sub.id) ? '' : k ? ' Saving logs ' + sub.label + ' as ' + (k === 'full' ? 'Full' : 'Minimum') + ' in Habits.' : ' Under 10 minutes, so nothing goes to Habits.';
+    $('wrapSub').textContent = m + ' min focused, ' + (r ? r + (r === 1 ? ' exercise' : ' exercises') + ' finished, ' : '') + n + (n === 1 ? ' distraction' : ' distractions') + ' logged.' + toHabits + (T.completed ? '' : ' Ending early is information, not failure. If it keeps happening, try a shorter block.');
     document.title = 'Wrap up · Focus Desk';
   }
   renderPip();
+}
+function renderSubjects(){
+  const box = $('subjects'); box.textContent = '';
+  SUBJECTS.forEach(s => {
+    const b = el('button', 'tag', s.label); b.type = 'button'; b.setAttribute('aria-pressed', T.subject === s.id ? 'true' : 'false');
+    b.onclick = () => { T.subject = T.subject === s.id ? null : s.id; saveTimer(); renderSubjects(); };
+    box.appendChild(b);
+  });
 }
 function renderChecks(){
   const box = $('checks'); box.textContent = '';
@@ -1015,7 +1093,10 @@ function renderSetup(){
 /* ---------- settings ---------- */
 function fillSettings(){
   $('sFocus').value = settings.focusMin; $('sBreak').value = settings.breakMin; $('sLong').value = settings.longBreakMin; $('sSound').checked = !!settings.sound; $('sVol').value = settings.volume || 'normal';
+  $('sWind').value = settings.windDown || DEFAULTS.windDown; $('sFirst').value = settings.firstBlock || DEFAULTS.firstBlock;
 }
+$('sWind').onchange = () => { settings.windDown = $('sWind').value || DEFAULTS.windDown; saveSettings(); fillSettings(); renderTimer(); };
+$('sFirst').onchange = () => { settings.firstBlock = $('sFirst').value || DEFAULTS.firstBlock; saveSettings(); fillSettings(); renderTimer(); };
 const clamp = (v, lo, hi, d) => { v = parseInt(v, 10); return isNaN(v) ? d : Math.min(hi, Math.max(lo, v)); };
 $('sFocus').onchange = () => { settings.focusMin = clamp($('sFocus').value, 5, 120, 25); saveSettings(); fillSettings(); renderTimer(); };
 $('sBreak').onchange = () => { settings.breakMin = clamp($('sBreak').value, 1, 30, 5); saveSettings(); fillSettings(); };
@@ -1037,7 +1118,7 @@ function exportData(){
   const data = {
     app:'focus-desk', version:1, exportedAt:new Date().toISOString(),
     timezone:Intl.DateTimeFormat().resolvedOptions().timeZone,
-    notes:'blocks = focus sessions (planned/focused minutes, completed = ran to the end, reps = exercises finished). journal = urges to switch, tagged with why; blockId links an urge to the block it happened in.',
+    notes:'blocks = focus sessions (planned/focused minutes, completed = ran to the end, reps = exercises finished, subject = what it was for; a block with a subject also logs to Habits). journal = urges to switch, tagged with why; blockId links an urge to the block it happened in.',
     settings:{focusMin:settings.focusMin, breakMin:settings.breakMin, longBreakMin:settings.longBreakMin, rules:settings.rules},
     blocks:log.blocks.map(b => Object.assign({}, b, {startTime:iso(b.start), endTime:iso(b.end)})),
     journal:journal.entries.map(e => Object.assign({}, e, {time:iso(e.at), tagLabel:tagLabel(e.tag)})),
@@ -1128,10 +1209,10 @@ document.addEventListener('keydown', e => {
 
 /* ---------- streak panel ---------- */
 function renderStreak(){
+  // Streaks live in Habits; this panel keeps only the focus-day counts and heatmap.
   const today = new Date(), s = computeStreak(log.blocks, today);
-  $('streakBtn').textContent = s.current ? s.current + '-day streak' : 'Streak';
   const stats = $('streakStats'); stats.textContent = '';
-  [[s.current, 'Current streak'], [s.longest, 'Longest streak'], [s.activeDays, 'Active days (all time)'], [s.thisMonth, 'Active days this month']].forEach(([v, l]) => {
+  [[s.activeDays, 'Active days (all time)'], [s.thisMonth, 'Active days this month']].forEach(([v, l]) => {
     const st = el('div', 'stat'); st.append(el('b', null, String(v)), el('span', null, l)); stats.appendChild(st);
   });
   // 26 weeks: columns are weeks, rows Mon–Sun, ending with the current week
@@ -1152,8 +1233,7 @@ function renderStreak(){
   for (let idx = 0; idx <= todayIdx; idx++){
     const d = dateAt(idx), info = s.days.get(dayKey(d.getTime())), c = el('i', 'cell');
     const label = d.toLocaleDateString([], {weekday:'short', day:'numeric', month:'short'});
-    if (info && info.repaired){ c.classList.add('rep'); c.title = label + ': repaired'; }
-    else if (info){
+    if (info && info.blocks){
       inRange++;
       const lv = info.min >= 120 ? 4 : info.min >= 60 ? 3 : info.min >= 25 ? 2 : 1; // any active day shows, even under a minute
       c.classList.add('l' + lv); c.title = label + ': ' + info.min + ' min, ' + plural(info.blocks, 'block');
@@ -1162,14 +1242,6 @@ function renderStreak(){
     heat.appendChild(c);
   }
   heat.setAttribute('aria-label', 'Focus over the last 26 weeks: ' + plural(inRange, 'active day') + '.');
-  // never blaming: say what keeps or restarts the streak
-  let msg;
-  if (!s.activeDays) msg = 'Your streak starts with your next block.';
-  else if (s.repairNeed) msg = s.repairNeed === 2 ? 'Missed yesterday. Finish 2 blocks today to repair it.' : 'Missed yesterday. Finish 1 more block today to repair it.';
-  else if (!s.todayActive && s.current) msg = 'Finish a block today to keep your ' + s.current + '-day streak.';
-  else if (!s.current) msg = 'New streak starts with your next block. Longest: ' + plural(s.longest, 'day') + '.';
-  else msg = "Today counts. You're on a " + s.current + '-day streak.';
-  $('streakStatus').textContent = msg;
 }
 $('streakBtn').onclick = () => { const s = $('streak'); s.hidden = !s.hidden; $('streakBtn').setAttribute('aria-expanded', String(!s.hidden)); };
 
