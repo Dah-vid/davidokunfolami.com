@@ -153,11 +153,14 @@ a {
   color: var(--paper);
 }
 
-/* seven links fit one row on a 360px phone */
-@media (max-width: 420px) {
+/* phones: two even rows of four instead of a ragged wrap with one link
+   left on its own line */
+@media (max-width: 540px) {
   .site-header nav {
-    font-size: 0.85rem;
-    column-gap: 0.7rem;
+    display: grid;
+    grid-template-columns: repeat(4, max-content);
+    gap: 0.35rem 1.5rem;
+    width: 100%;
   }
 }
 

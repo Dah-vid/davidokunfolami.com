@@ -102,10 +102,11 @@ edit all of them or the site goes inconsistent:
 Quick check that all five match:
 `grep -c 'x.com/thatboycodes' index.html blog/index.html blog/post.html focus/index.html`
 
-The header nav is duplicated the same way (all five files, `habits/index.html`
-included) — add a new page's link to each. Seven links still fit one row on
-a 360px phone thanks to the `max-width: 420px` rule in `styles.css`; an
-eighth will wrap.
+The header nav is duplicated the same way (all six files, `habits/index.html`
+and `desk/index.html` included) — add a new page's link to each. On phones
+(under 540px) the `max-width: 540px` rule in `styles.css` lays the nav out
+as a grid of four columns, so it breaks into even rows instead of leaving
+one link alone on a line.
 
 ## Focus Desk (`focus/`)
 
@@ -175,8 +176,8 @@ Focus Desk is listed first 05:00–09:00 (with the resume note), Habits
 first otherwise; a "Weekly review due" link appears Sunday/Monday until
 the review is done. It only ever *reads* localStorage. Its date and
 entry rules are copied from the pure block in `habits/index.html`, so if
-you change those rules there, change them here too. `noindex`, not in
-the site nav; Focus Desk and Habits each link to it from their top bar.
+you change those rules there, change them here too. `noindex`, but in
+the site nav, and Focus Desk and Habits link to it from their top bar too.
 
 ## Change colors or fonts
 
