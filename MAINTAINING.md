@@ -157,6 +157,26 @@ logging, so honest options are as easy as Full.
   / `streaks:end` markers so it can be run in node.
 - **Edit habits** in its Settings panel (rename, reorder, archive, targets);
   archiving keeps the history.
+- **Weekly review** (header button, or `/habits/#review`): last week's
+  numbers, read from `habits:entries` plus Focus Desk's `focusdesk:log` and
+  `focusdesk:journal`, and three questions saved per ISO week in
+  `habits:reviews`. On Sundays it reviews the week ending that day;
+  otherwise the last full week. The button is highlighted on Sundays,
+  and on Mondays until all three answers are in. Last week's "one change"
+  shows at the top. The maths is `weekReview()` in the pure block, and the
+  question wording is `REVIEW_QS` (export) plus the labels in the HTML.
+  Reviews are in the export.
+
+## Desk (`desk/`)
+
+A read-only start page: today's date, Focus Desk blocks and minutes, each
+habit's status today, last night's Bedtime, and weekly "2 of 4" progress.
+Focus Desk is listed first 05:00–09:00 (with the resume note), Habits
+first otherwise; a "Weekly review due" link appears Sunday/Monday until
+the review is done. It only ever *reads* localStorage. Its date and
+entry rules are copied from the pure block in `habits/index.html`, so if
+you change those rules there, change them here too. `noindex`, not in
+the site nav; Focus Desk and Habits each link to it from their top bar.
 
 ## Change colors or fonts
 

@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>Desk — David Okunfolami</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="preload" href="/fonts/archivo-expanded-black.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/styles.css">
+<style>
+/* The way in to Focus Desk (/focus/) and Habits (/habits/). Same tokens as both. Read-only:
+   this page only ever reads localStorage, it never writes. */
+:root{
+  --bg:var(--carbon); --panel:#17191c; --ink:var(--paper); --muted:var(--smoke); --line:var(--graphite);
+  --display:var(--font-display); --body:var(--font-body);
+}
+[hidden]{display:none!important}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.5;margin:0}
+h1,h2{font-family:var(--display);font-weight:900;font-stretch:125%;text-transform:uppercase;margin:0;letter-spacing:.01em;text-wrap:balance}
+p{margin:0}
+.app{padding-block:clamp(1rem,4vh,2.5rem) 56px;display:flex;flex-direction:column;gap:20px}
+.eyebrow{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.date{font-size:clamp(2rem,7vw,4rem);line-height:1}
+
+/* review due: same banner as Habits' never-miss-twice line */
+.banner{border-left:3px solid var(--ink);background:var(--panel);padding:10px 14px}
+.banner a{font-weight:700}
+
+/* the two big links: hairline rows that invert on hover, like the homepage project list */
+.go{list-style:none;margin:0;padding:0}
+.go li{position:relative;border-top:1px solid var(--line);padding:22px 4px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 16px;align-items:start}
+.go a{font-family:var(--display);font-weight:900;font-stretch:125%;text-transform:uppercase;letter-spacing:.01em;font-size:clamp(1.9rem,6.5vw,3.5rem);line-height:1;text-decoration:none}
+.go a::after{content:"";position:absolute;inset:0}
+.go .arrow{font-size:1.75rem;line-height:1;color:var(--muted);pointer-events:none}
+.go .sub{grid-column:1;color:var(--muted);font-size:14px;display:flex;flex-direction:column;gap:4px}
+.go .note{color:var(--ink);white-space:pre-wrap;overflow-wrap:anywhere;max-width:62ch}
+.go li:hover,.go li:focus-within{background:var(--ink);color:var(--bg);border-top-color:var(--ink)}
+.go li:hover .sub,.go li:focus-within .sub,.go li:hover .arrow,.go li:focus-within .arrow{color:#4a4e52}
+.go li:hover .note,.go li:focus-within .note{color:var(--bg)}
+.go li:focus-within{outline:none}
+.go a:focus-visible{outline:none}
+@media (prefers-reduced-motion:no-preference){.go .arrow{transition:transform 120ms ease-out}.go li:hover .arrow{transform:translateX(.35rem)}}
+
+/* today */
+.grid{display:grid;grid-template-columns:minmax(0,1fr);gap:20px 32px;align-items:start}
+@media (min-width:860px){.grid{grid-template-columns:minmax(0,1fr) minmax(0,1.4fr)}}
+.sec{border-top:1px solid var(--line);padding-top:14px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.sec h2{font-size:18px}
+.big{font-size:20px;font-weight:600;font-variant-numeric:tabular-nums}
+.muted{color:var(--muted);font-size:13px}
+.rows{list-style:none;margin:0;padding:0}
+.row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 14px;padding:9px 0;border-bottom:1px solid var(--line);align-items:baseline;font-variant-numeric:tabular-nums}
+.row .name{font-weight:700}
+.row .st{font-size:14px;white-space:nowrap}
+.row .st.none{color:var(--muted)}
+.row .sub{grid-column:1/-1;font-size:12px;color:var(--muted)}
+</style>
+</head>
+<body>
+<a class="skip-link" href="#links">Skip to links</a>
+
+<header class="site-header">
+  <a class="mark" href="/" aria-label="David Okunfolami — home">DO</a>
+  <nav aria-label="Site">
+    <a href="/#projects">projects</a>
+    <a href="/blog/">blog</a>
+    <a href="/focus/">focus</a>
+    <a href="/habits/">habits</a>
+    <a href="/#about">about</a>
+    <a href="/#contact">contact</a>
+  </nav>
+</header>
+
+<main class="app">
+  <div>
+    <p class="eyebrow">Desk</p>
+    <h1 class="date" id="date"></h1>
+  </div>
+
+  <p class="banner" id="reviewDue" hidden><a href="/habits/#review">Weekly review due →</a></p>
+
+  <ul class="go" id="links"></ul>
+
+  <div class="grid">
+    <section class="sec" aria-labelledby="fdH">
+      <h2 id="fdH">Focus today</h2>
+      <p class="big" id="fdToday"></p>
+      <p class="muted" id="fdLast"></p>
+    </section>
+    <section class="sec" aria-labelledby="hH">
+      <h2 id="hH">Habits today</h2>
+      <ul class="rows" id="habits"></ul>
+      <p class="muted" id="bedLast"></p>
+    </section>
+  </div>
+</main>
+
+<script>
+(function(){
+const $ = id => document.getElementById(id);
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+// read only: there is deliberately no setter here
+const read = key => { try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; } catch (e) { return null; } };
+
+/* Date and entry rules, copied from the pure block in /habits/ so the numbers match it. */
+const ymd = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+const dateOf = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d, 12); };
+const addDays = (s, n) => { const d = dateOf(s); d.setDate(d.getDate() + n); return ymd(d); };
+const mondayOf = s => addDays(s, -((dateOf(s).getDay() + 6) % 7));
+const minsOf = d => d.getHours() * 60 + d.getMinutes();
+const habitToday = (h, d) => (h.window && h.window[0] > h.window[1] && minsOf(d) < h.window[1]) ? addDays(ymd(d), -1) : ymd(d);
+const RANK = {full:3, min:2, reserve:1};
+const better = (a, b) => (RANK[a.kind] || 0) !== (RANK[b.kind] || 0) ? (RANK[a.kind] || 0) > (RANK[b.kind] || 0) : a.source === 'focusdesk' && b.source !== 'focusdesk';
+const isoWeekKey = monday => { const th = dateOf(addDays(monday, 3)), y = th.getFullYear(); return y + '-W' + String(1 + Math.floor(Math.round((th - new Date(y, 0, 1, 12)) / 864e5) / 7)).padStart(2, '0'); };
+const reviewWeekOf = d => d.getDay() === 0 ? mondayOf(ymd(d)) : addDays(mondayOf(ymd(d)), -7);
+const reviewDone = r => !!r && ['q1', 'q2', 'q3'].every(q => typeof r[q] === 'string' && r[q].trim());
+const reviewDue = (d, reviews) => (d.getDay() === 0 || d.getDay() === 1) && !reviewDone((reviews || {})[isoWeekKey(reviewWeekOf(d))]);
+const KIND_LABEL = {full:'Full', min:'Minimum', reserve:'Reserve'};
+
+function render(){
+  const d = new Date(), today = ymd(d);
+  const fdSettings = read('focusdesk:settings') || {}, log = read('focusdesk:log'), blocks = log && Array.isArray(log.blocks) ? log.blocks : [];
+  const hs = read('habits:habits'), habits = Array.isArray(hs) ? hs.filter(h => h.active !== false) : [];
+  const es = read('habits:entries'), entries = es && Array.isArray(es.entries) ? es.entries : [];
+  const rs = read('habits:reviews'), reviews = rs && rs.reviews ? rs.reviews : {};
+  const entryFor = (id, day) => { let best = null; for (const e of entries) if (e.habitId === id && e.day === day && RANK[e.kind] && (!best || better(e, best))) best = e; return best; };
+  // same as Habits' weekStatus: Full + Minimum this Mon–Sun, each Reserve lowering the target (floor 1)
+  const weekStatus = (h, day) => { const w = mondayOf(day), end = addDays(w, 6); let done = 0, res = 0; entries.forEach(e => { if (e.habitId === h.id && e.day >= w && e.day <= end) e.kind === 'reserve' ? res++ : RANK[e.kind] && done++; }); return {done, target:Math.max(1, (h.target || 1) - res)}; };
+
+  const dateText = d.toLocaleDateString([], {weekday:'long'}), dm = d.toLocaleDateString([], {day:'numeric', month:'long'});
+  const h1 = $('date'); h1.textContent = dateText + ' '; h1.append(el('span', 'outline', dm));
+  $('reviewDue').hidden = !(habits.length && reviewDue(d, reviews));
+
+  // Focus Desk: the same count Focus Desk shows on its idle screen
+  const tb = blocks.filter(b => b && ymd(new Date(b.end)) === today);
+  const done = tb.filter(b => b.completed).length, mins = tb.reduce((a, b) => a + (b.focusedMin || 0), 0);
+  const fdLine = done + (done === 1 ? ' block' : ' blocks') + ' · ' + mins + ' min focused today';
+  $('fdToday').textContent = fdLine;
+  const last = blocks.length ? blocks[blocks.length - 1] : null;
+  $('fdLast').textContent = last && last.end ? 'Last block: ' + (last.goal || 'no goal set') + ', ' + (last.focusedMin || 0) + ' min, ' + new Date(last.end).toLocaleDateString([], {weekday:'short', day:'numeric', month:'short'}) + '.' : 'No blocks saved in this browser yet.';
+
+  // Habits today
+  const ul = $('habits'); ul.textContent = '';
+  let logged = 0;
+  habits.forEach(h => {
+    const e = entryFor(h.id, habitToday(h, d)), li = el('li', 'row');
+    if (e) logged++;
+    li.append(el('span', 'name', h.name), el('span', 'st' + (e ? '' : ' none'), e ? KIND_LABEL[e.kind] + (e.kind === 'reserve' && e.reason ? ' · ' + e.reason : '') : 'not yet'));
+    const sub = [];
+    if (h.cadence === 'weekly'){ const w = weekStatus(h, habitToday(h, d)); sub.push(w.done + ' of ' + w.target + ' this week'); }
+    else if (h.window) sub.push('tonight, 9pm–3am');
+    if (e && e.source === 'focusdesk') sub.push('from Focus Desk');
+    if (sub.length) li.append(el('span', 'sub', sub.join(' · ')));
+    ul.append(li);
+  });
+  if (!habits.length) ul.append(el('li', 'muted', 'No habits yet. Open Habits once to set them up.'));
+
+  // last night's Bedtime entry
+  const bed = habits.find(h => h.window);
+  if (bed){
+    const night = addDays(habitToday(bed, d), -1), e = entryFor(bed.id, night);
+    $('bedLast').textContent = 'Last night (' + dateOf(night).toLocaleDateString([], {weekday:'long'}) + '): ' +
+      (e ? KIND_LABEL[e.kind] + (e.kind === 'full' && bed.full ? ', ' + bed.full.toLowerCase() : e.kind === 'min' && bed.min ? ', ' + bed.min.toLowerCase() : e.reason ? ', ' + e.reason : '') : 'nothing logged') + '.';
+  } else $('bedLast').textContent = '';
+
+  // the two big links: Focus Desk first 05:00–09:00, with the resume note under it
+  const morning = minsOf(d) >= 300 && minsOf(d) < 540, resume = fdSettings.resume && fdSettings.resume.text;
+  const link = (href, title, subs) => {
+    const li = el('li'), a = el('a', null, title), s = el('div', 'sub'); a.href = href;
+    subs.forEach(x => s.append(x));
+    li.append(a, el('span', 'arrow', '→'), s); li.querySelector('.arrow').setAttribute('aria-hidden', 'true');
+    return li;
+  };
+  const fdSubs = [];
+  if (morning){
+    fdSubs.push(el('span', 'eyebrow', 'Morning block. Resume note:'));
+    fdSubs.push(el('span', 'note', resume || 'No resume note saved. Start with the smallest next step.'));
+  } else fdSubs.push(el('span', null, fdLine));
+  const fdRow = link('/focus/', 'Focus Desk', fdSubs);
+  const hRow = link('/habits/', 'Habits', [el('span', null, habits.length ? logged + ' of ' + habits.length + ' logged today' : 'Set up your habits')]);
+  const list = $('links'); list.textContent = '';
+  morning ? list.append(fdRow, hRow) : list.append(hRow, fdRow);
+}
+
+render();
+// another tab logged something, the tab came back, or the clock moved into or out of the morning
+window.addEventListener('storage', render);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
+let lastKey = '';
+setInterval(() => { const d = new Date(), k = ymd(d) + (minsOf(d) >= 300 && minsOf(d) < 540) + (d.getHours() < 3 || d.getHours() >= 21); if (k !== lastKey){ lastKey = k; render(); } }, 15000);
+})();
+</script>
+</body>
+</html>

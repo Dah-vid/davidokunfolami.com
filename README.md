@@ -14,6 +14,7 @@ projects.json   the only file you edit to change projects
 blog/           the blog (see "Writing a blog post" below)
 focus/          Focus Desk, a self-contained focus timer app (see MAINTAINING.md)
 habits/         Habits tracker (noindex); fed by Focus Desk (see MAINTAINING.md)
+desk/           start page for Focus Desk + Habits, read-only (noindex)
 fonts/          self-hosted Archivo Expanded Black (headings)
 David-Okunfolami-CV.pdf   linked from the CV section
 favicon.svg

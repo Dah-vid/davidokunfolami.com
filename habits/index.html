@@ -117,6 +117,21 @@ a.btn{display:inline-block;text-decoration:none;color:inherit}
 .maprow{display:grid;grid-template-columns:140px minmax(0,1fr);gap:8px;align-items:center;font-size:13px}
 .data-row{display:flex;flex-wrap:wrap;align-items:center;gap:10px;border-top:1px solid var(--line);padding-top:12px}
 .data-status{font-size:13px;color:var(--muted)}
+
+/* Weekly review: numbers on the left, three questions on the right */
+.btn.due{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+textarea.field{min-height:68px;resize:vertical;line-height:1.45}
+.rv-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:20px;align-items:start}
+@media (min-width:860px){.rv-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
+.rv-rows{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}
+.rv-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 14px;padding:8px 0;border-bottom:1px solid var(--line);align-items:baseline;font-variant-numeric:tabular-nums}
+.rv-row .n{font-size:13px;color:var(--muted);white-space:nowrap}
+.rv-row .n b{color:var(--ink);font-size:15px}
+.rv-row .sub{grid-column:1/-1;font-size:12px;color:var(--muted)}
+.rv-stats{grid-template-columns:repeat(auto-fit,minmax(150px,1fr));row-gap:12px}
+.rv-stats .stat b{font-size:17px;overflow-wrap:anywhere}
+.rv-q{display:flex;flex-direction:column;gap:6px}
+.rv-said p:last-child{white-space:pre-wrap}
 </style>
 </head>
 <body>
@@ -139,9 +154,46 @@ a.btn{display:inline-block;text-decoration:none;color:inherit}
     <h1 class="brand">Habits</h1>
     <span class="chip-status">Saved in this browser</span>
     <span class="spacer"></span>
+    <a class="btn small" href="/desk/">Desk</a>
     <a class="btn small" href="/focus/">Focus Desk</a>
+    <button class="btn small" id="reviewBtn" type="button" aria-expanded="false" aria-controls="review">Weekly review</button>
     <button class="btn small" id="settingsBtn" type="button" aria-expanded="false" aria-controls="settings">Settings</button>
   </header>
+
+  <section class="panel" id="review" aria-labelledby="revH" hidden>
+    <div class="sec-h"><h2 id="revH">Weekly review</h2><span class="legend" id="revRange"></span></div>
+    <div class="banner rv-said" id="revSaid" hidden>
+      <p class="eyebrow">Last week you said:</p>
+      <p id="revSaidText"></p>
+    </div>
+    <div class="rv-grid">
+      <div class="col">
+        <div class="col" style="gap:6px">
+          <p class="eyebrow">Habits · Full / Minimum / Reserve</p>
+          <ul class="rv-rows" id="revHabits"></ul>
+        </div>
+        <div class="col" style="gap:8px">
+          <p class="eyebrow">Focus Desk</p>
+          <div class="stats rv-stats" id="revFocus"></div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="rv-q">
+          <label class="lbl" for="rq1">What got done on minimums, and why?</label>
+          <textarea class="field" id="rq1" maxlength="1000"></textarea>
+        </div>
+        <div class="rv-q">
+          <label class="lbl" for="rq2">Which subject pushed me out most, and what's the cause (too easy / too hard / pointless)?</label>
+          <textarea class="field" id="rq2" maxlength="1000"></textarea>
+        </div>
+        <div class="rv-q">
+          <label class="lbl" for="rq3">One change for next week:</label>
+          <textarea class="field" id="rq3" maxlength="400"></textarea>
+        </div>
+        <p class="data-status" id="revStatus" role="status"></p>
+      </div>
+    </div>
+  </section>
 
   <section class="panel" id="settings" aria-labelledby="setH" hidden>
     <div class="sec-h"><h2 id="setH">Settings</h2><button class="btn small" id="addHabit" type="button">Add habit</button></div>
@@ -287,6 +339,56 @@ function computeStreaks(habits, entries, todayDate){
   let longestRun = 0, run = 0, prev = null;
   for (const k of activeKeys){ run = prev && addDays(prev, 1) === k ? run + 1 : 1; longestRun = Math.max(longestRun, run); prev = k; }
   return {habits:perHabit, activeDays:activeKeys.length, longestRun, days:overall};
+}
+
+/* Weekly review. Reviews are keyed by ISO week ("2026-W45"). On a Sunday the week under review
+   is the one ending today; any other day it's the last full Mon–Sun week. */
+const isoWeekKey = monday => {
+  const th = dateOf(addDays(monday, 3)), y = th.getFullYear(); // ISO weeks belong to the year of their Thursday
+  return y + '-W' + String(1 + Math.floor(Math.round((th - new Date(y, 0, 1, 12)) / 864e5) / 7)).padStart(2, '0');
+};
+const reviewWeekOf = d => d.getDay() === 0 ? mondayOf(ymd(d)) : addDays(mondayOf(ymd(d)), -7);
+const reviewDone = r => !!r && ['q1', 'q2', 'q3'].every(q => typeof r[q] === 'string' && r[q].trim());
+// highlighted on Sundays, and on Mondays while last week's review isn't done
+const reviewDue = (d, reviews) => (d.getDay() === 0 || d.getDay() === 1) && !reviewDone((reviews || {})[isoWeekKey(reviewWeekOf(d))]);
+
+// Last week's numbers. blocks / journal are Focus Desk's focusdesk:log and focusdesk:journal, read only.
+function weekReview(habits, entries, blocks, journal, monday, todayDate){
+  const sunday = addDays(monday, 6), startOf = s => { const d = dateOf(s); d.setHours(0, 0, 0, 0); return d.getTime(); };
+  const from = startOf(monday), to = startOf(addDays(monday, 7));
+  const best = new Map();
+  for (const e of entries || []){
+    if (!e || !RANK[e.kind] || !(e.day >= monday && e.day <= sunday)) continue;
+    const k = e.habitId + '|' + e.day, b = best.get(k); if (!b || better(e, b)) best.set(k, e);
+  }
+  let bedtime = null;
+  const rows = habits.filter(h => h.active !== false).map(h => {
+    const today = habitToday(h, todayDate);
+    let full = 0, min = 0, reserve = 0, open = 0;
+    for (let i = 0; i < 7; i++){
+      const d = addDays(monday, i), e = best.get(h.id + '|' + d);
+      if (e) e.kind === 'full' ? full++ : e.kind === 'min' ? min++ : reserve++;
+      // a day it could have been done: from when the habit started up to yesterday (today once logged)
+      if (e || (d >= (h.createdDay || '') && d < today)) open++;
+    }
+    const done = full + min;
+    // same rule as the streaks: each Reserve lowers the target by 1 (floor 1 for weekly habits)
+    const target = h.cadence === 'weekly' ? Math.max(1, (h.target || 1) - reserve) : Math.max(0, open - reserve);
+    const row = {id:h.id, name:h.name, cadence:h.cadence, full, min, reserve, done, target, days:open, met:target > 0 && done >= target};
+    if (h.window && !bedtime) bedtime = {name:h.name, hit:done, nights:open, full, min};
+    return row;
+  });
+  const wb = (blocks || []).filter(b => b && b.end >= from && b.end < to);
+  const minutes = wb.reduce((a, b) => a + (b.focusedMin || 0), 0);
+  const wj = (journal || []).filter(e => e && e.at >= from && e.at < to), inBlock = wj.filter(e => e.blockId);
+  const top = (list, key) => { const c = {}; list.forEach(x => { const k = key(x); if (k) c[k] = (c[k] || 0) + 1; }); const t = Object.entries(c).sort((a, b) => b[1] - a[1])[0]; return t ? {id:t[0], n:t[1]} : null; };
+  const subjectOf = new Map((blocks || []).map(b => [b && b.id, b && b.subject]));
+  return {
+    monday, sunday, key:isoWeekKey(monday), habits:rows, bedtime,
+    focus:{blocks:wb.filter(b => b.completed).length, started:wb.length, minutes, urges:inBlock.length,
+      perHour:minutes ? inBlock.length / (minutes / 60) : null,
+      topTag:top(wj, e => e.tag), topSubject:top(inBlock, e => subjectOf.get(e.blockId))}
+  };
 }
 /* streaks:end */
 
@@ -495,6 +597,75 @@ function renderStreaks(){
   heat.setAttribute('aria-label', 'Habit activity over the last 26 weeks: ' + plural(active, 'active day') + '.');
 }
 
+/* ---------- weekly review ----------
+   Answers save as you type into habits:reviews ({reviews:{"2026-W45":{...}}}), re-read before
+   each write so another tab's answers are kept. A review is done once all three are answered. */
+const TAG_LABEL = {autopilot:'Autopilot', bored:'Bored', effort:"Don't want to think", stuck:'Stuck', task:'Remembered a task', idea:'New idea'};
+const SUBJECT_LABEL = Object.fromEntries(SUBJECTS.map(s => [s.id, s.label]));
+const REVIEW_QS = {q1:'What got done on minimums, and why?', q2:"Which subject pushed me out most, and what's the cause (too easy / too hard / pointless)?", q3:'One change for next week:'};
+const loadReviews = () => { const s = get('reviews'); return s && s.reviews && typeof s.reviews === 'object' ? s.reviews : {}; };
+const fdGet = k => { try { const v = localStorage.getItem('focusdesk:' + k); return v ? JSON.parse(v) : null; } catch (e) { return null; } };
+const shortDate = s => dateOf(s).toLocaleDateString([], {weekday:'short', day:'numeric', month:'short'});
+
+function saveAnswer(q, text){
+  const d = new Date(), monday = reviewWeekOf(d), key = isoWeekKey(monday), all = loadReviews();
+  const r = Object.assign({week:key, monday}, all[key]);
+  r[q] = text; r.updatedAt = now();
+  if (reviewDone(r)) r.doneAt = r.doneAt || now(); else delete r.doneAt;
+  all[key] = r; set('reviews', {reviews:all});
+  renderReviewStatus(r); renderReviewBtn();
+}
+['q1', 'q2', 'q3'].forEach((q, i) => $('rq' + (i + 1)).addEventListener('input', ev => saveAnswer(q, ev.target.value)));
+
+function renderReviewBtn(){
+  const due = reviewDue(new Date(), loadReviews()), b = $('reviewBtn');
+  b.classList.toggle('due', due);
+  b.textContent = due ? 'Weekly review due' : 'Weekly review';
+}
+function renderReviewStatus(r){
+  const left = ['q1', 'q2', 'q3'].filter(q => !(r && r[q] && r[q].trim())).length;
+  $('revStatus').textContent = !left ? 'Review done. Saved in this browser.' : left === 3 ? 'Answers save as you type.' : 'Saved. ' + left + ' to go before the review is done.';
+}
+function renderReview(){
+  renderReviewBtn();
+  const d = new Date(), monday = reviewWeekOf(d), all = loadReviews(), r = all[isoWeekKey(monday)] || {};
+  const prev = all[isoWeekKey(addDays(monday, -7))];
+  $('revSaid').hidden = !(prev && prev.q3 && prev.q3.trim());
+  $('revSaidText').textContent = prev && prev.q3 ? prev.q3.trim() : '';
+  // keep what's being typed: only fill a box that doesn't have focus
+  ['q1', 'q2', 'q3'].forEach((q, i) => { const t = $('rq' + (i + 1)); if (document.activeElement !== t) t.value = r[q] || ''; });
+  renderReviewStatus(r);
+
+  const log = fdGet('log'), journal = fdGet('journal');
+  const w = weekReview(habits, entries, log && log.blocks, journal && journal.entries, monday, d);
+  $('revRange').textContent = (d.getDay() === 0 ? 'This week, ' : 'Last week, ') + shortDate(w.monday) + ' – ' + shortDate(w.sunday);
+  const ul = $('revHabits'); ul.textContent = '';
+  w.habits.forEach(h => {
+    const li = el('li', 'rv-row'), n = el('span', 'n');
+    n.append('F ', el('b', null, String(h.full)), ' · M ', el('b', null, String(h.min)), ' · R ', el('b', null, String(h.reserve)));
+    li.append(el('span', 'habit-name', h.name), n);
+    let sub;
+    if (h.cadence === 'weekly') sub = h.done + ' of ' + h.target + (h.met ? ', week counted' : ', short by ' + (h.target - h.done));
+    else if (!h.days) sub = 'Not started yet';
+    else sub = h.done + ' of ' + h.target + (habits.find(x => x.id === h.id && x.window) ? ' nights' : ' days') + (h.reserve ? ' (' + plural(h.reserve, 'reserve') + ' taken off)' : '') + (h.met ? '' : ', missed ' + (h.target - h.done));
+    if (h.done) sub += ' · Minimum ' + h.min + ' of ' + h.done;
+    li.append(el('span', 'sub', sub)); ul.append(li);
+  });
+  const f = w.focus, stats = $('revFocus'); stats.textContent = '';
+  const items = [
+    [String(f.blocks), 'blocks finished' + (f.started > f.blocks ? ' (' + f.started + ' saved)' : '')],
+    [String(f.minutes), 'minutes focused'],
+    [f.perHour == null ? '–' : f.perHour.toFixed(1), 'urges per focus hour'],
+    [f.topTag ? TAG_LABEL[f.topTag.id] || f.topTag.id : '–', f.topTag ? 'top urge reason (' + f.topTag.n + ')' : 'top urge reason (none tagged)'],
+    [f.topSubject ? SUBJECT_LABEL[f.topSubject.id] || f.topSubject.id : '–', f.topSubject ? 'subject with most urges (' + f.topSubject.n + ')' : 'subject with most urges'],
+    [w.bedtime && w.bedtime.nights ? Math.round(w.bedtime.hit / w.bedtime.nights * 100) + '%' : '–',
+      w.bedtime ? 'bedtime hit, ' + w.bedtime.hit + ' of ' + plural(w.bedtime.nights, 'night') + (w.bedtime.full ? ' (' + w.bedtime.full + ' by 10pm)' : '') : 'bedtime (no Bedtime habit)']
+  ];
+  items.forEach(([v, l]) => { const s = el('div', 'stat'); s.append(el('b', null, v), el('span', null, l)); stats.append(s); });
+}
+const openReview = open => { $('review').hidden = !open; $('reviewBtn').setAttribute('aria-expanded', String(open)); };
+$('reviewBtn').onclick = () => openReview($('review').hidden);
+
 /* ---------- settings ---------- */
 function renderSettings(){
   const box = $('editors'); box.textContent = '';
@@ -553,20 +724,24 @@ $('addHabit').onclick = () => {
 /* ---------- export / import (same pattern as Focus Desk) ---------- */
 const iso = t => (typeof t === 'number' && isFinite(t)) ? new Date(t).toISOString() : null;
 $('exportBtn').onclick = () => {
-  const nameOf = id => (habits.find(h => h.id === id) || {}).name || null;
+  const nameOf = id => (habits.find(h => h.id === id) || {}).name || null, reviews = loadReviews();
   const data = {
     app:'habits', version:1, exportedAt:new Date().toISOString(), timezone:Intl.DateTimeFormat().resolvedOptions().timeZone,
-    notes:'habits = what is tracked: cadence daily or weekly; target = Full+Minimum entries needed per Mon-Sun week, each Reserve lowering it by 1 (floor 1); reserves = emergency skips allowed per week; active false = archived. entries = at most one per habit per day: kind full | min | reserve; reserve has a reason; late = why a past day was filled in afterwards (allowed up to 48h); source focusdesk = written automatically from a timed Focus Desk block, with focusedMin and blockId; day = local date the entry is for; time = when it was logged. mapping = Focus Desk subject -> habit id.',
+    notes:'habits = what is tracked: cadence daily or weekly; target = Full+Minimum entries needed per Mon-Sun week, each Reserve lowering it by 1 (floor 1); reserves = emergency skips allowed per week; active false = archived. entries = at most one per habit per day: kind full | min | reserve; reserve has a reason; late = why a past day was filled in afterwards (allowed up to 48h); source focusdesk = written automatically from a timed Focus Desk block, with focusedMin and blockId; day = local date the entry is for; time = when it was logged. mapping = Focus Desk subject -> habit id. reviews = one weekly review per ISO week (Mon-Sun, monday = its first day), answers keyed by question text; done = all three answered.',
     habits, mapping:settings.mapping,
     entries:entries.map(e => Object.assign({}, e, {time:iso(e.at), habitName:nameOf(e.habitId)})),
-    raw:{habits, settings, entries:{entries}}
+    reviews:Object.values(reviews).sort((a, b) => a.week < b.week ? -1 : 1).map(r => ({
+      week:r.week, monday:r.monday, sunday:r.monday ? addDays(r.monday, 6) : null, done:reviewDone(r), updated:iso(r.updatedAt),
+      answers:{[REVIEW_QS.q1]:r.q1 || '', [REVIEW_QS.q2]:r.q2 || '', [REVIEW_QS.q3]:r.q3 || ''}
+    })),
+    raw:{habits, settings, entries:{entries}, reviews:{reviews}}
   };
   const d = new Date(), pad = n => String(n).padStart(2, '0');
   const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], {type:'application/json'}));
   const a = el('a'); a.href = url; a.download = 'habits-' + d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + '.json';
   document.body.append(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
-  $('dataStatus').textContent = 'Exported ' + plural(habits.length, 'habit') + ' and ' + entries.length + (entries.length === 1 ? ' entry.' : ' entries.');
+  $('dataStatus').textContent = 'Exported ' + plural(habits.length, 'habit') + ', ' + entries.length + (entries.length === 1 ? ' entry' : ' entries') + ' and ' + plural(data.reviews.length, 'review') + '.';
 };
 const mergeById = (have, incoming) => { const ids = new Set(have.map(x => x.id)); const added = (Array.isArray(incoming) ? incoming : []).filter(x => x && typeof x === 'object' && x.id != null && !ids.has(x.id) && ids.add(x.id)); return {merged:have.concat(added), added:added.length}; };
 $('importBtn').onclick = () => $('importFile').click();
@@ -583,18 +758,28 @@ $('importFile').addEventListener('change', async () => {
     const best = new Map();
     e.merged.forEach(x => { const k = x.habitId + '|' + x.day, b = best.get(k); if (!b || better(x, b)) best.set(k, x); });
     habits = h.merged; entries = [...best.values()].sort((a, b) => a.at - b.at);
-    saveHabits(); saveEntries(); render();
-    $('dataStatus').textContent = 'Imported ' + e.added + ' new entries and ' + h.added + ' new habits. Existing data was kept.';
+    // reviews: add weeks that aren't here yet, never overwrite one that is
+    const reviews = loadReviews(), inRev = data.raw.reviews && data.raw.reviews.reviews;
+    let rAdded = 0;
+    if (inRev && typeof inRev === 'object') Object.entries(inRev).forEach(([k, r]) => { if (/^\d{4}-W\d{2}$/.test(k) && r && typeof r === 'object' && !reviews[k]){ reviews[k] = r; rAdded++; } });
+    saveHabits(); saveEntries(); if (rAdded) set('reviews', {reviews}); render();
+    $('dataStatus').textContent = 'Imported ' + e.added + ' new entries, ' + h.added + ' new habits and ' + plural(rAdded, 'review') + '. Existing data was kept.';
   } catch (err) {
     $('dataStatus').textContent = "That file couldn't be read as a Habits export. Choose a file made with the Export button.";
   } finally { $('importFile').value = ''; }
 });
 
 /* ---------- boot ---------- */
-function render(){ renderToday(); renderPast(); renderStreaks(); renderSettings(); }
+function render(){ renderToday(); renderPast(); renderStreaks(); renderReview(); renderSettings(); }
 render();
-// Focus Desk (another tab) wrote an entry: pick it up
-window.addEventListener('storage', ev => { if (!ev.key || ev.key.startsWith(P)) { habits = loadHabits(); settings = loadSettings(); entries = loadEntries(); render(); } });
+// /desk/ links to /habits/#review
+const fromHash = () => { if (location.hash === '#review'){ openReview(true); $('review').scrollIntoView({block:'start'}); } };
+fromHash(); window.addEventListener('hashchange', fromHash);
+// Focus Desk (another tab) wrote an entry or a block: pick it up
+window.addEventListener('storage', ev => {
+  if (!ev.key || ev.key.startsWith(P)) { habits = loadHabits(); settings = loadSettings(); entries = loadEntries(); render(); }
+  else if (ev.key.startsWith('focusdesk:')) renderReview();
+});
 // re-render when the day rolls over or Bedtime's window opens/closes, so a page left open stays honest
 const clockKey = () => ymd(new Date()) + habits.filter(h => h.window).map(h => inWindow(h.window, new Date())).join();
 let lastClock = clockKey();
