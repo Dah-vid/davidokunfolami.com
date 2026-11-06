@@ -65,6 +65,7 @@ kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-b
 
 .btn{border:1px solid var(--line);background:var(--raised);padding:8px 14px;cursor:pointer;font-weight:700}
 .btn:hover{border-color:var(--muted)}
+a.btn{display:inline-block;text-decoration:none;color:inherit}
 .btn.primary{background:var(--phase);border-color:var(--phase);color:var(--bg)}
 body[data-phase="idle"] .btn.primary{background:var(--ink);border-color:var(--ink)}
 .btn.quiet{background:transparent;border-color:transparent;color:var(--muted);font-weight:400;text-decoration:underline;text-underline-offset:3px}
@@ -247,6 +248,7 @@ body[data-phase="idle"] .rule .kw{color:var(--muted)}
     <a href="/#projects">projects</a>
     <a href="/blog/">blog</a>
     <a href="/focus/" aria-current="page">focus</a>
+    <a href="/habits/">habits</a>
     <a href="/#about">about</a>
     <a href="/#contact">contact</a>
   </nav>
@@ -259,6 +261,7 @@ body[data-phase="idle"] .rule .kw{color:var(--muted)}
     <span class="spacer"></span>
     <span class="keys"><kbd>Space</kbd> start / pause &nbsp; <kbd>D</kbd> log a distraction</span>
     <button class="btn small" id="pipBtn" type="button" hidden>Pop out mini timer</button>
+    <a class="btn small" href="/habits/">Habits</a>
     <button class="btn small" id="streakBtn" type="button" aria-expanded="false" aria-controls="streak">Focus days</button>
     <button class="btn small" id="settingsBtn" aria-expanded="false" aria-controls="settings">Settings</button>
   </header>

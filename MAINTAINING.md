@@ -102,8 +102,10 @@ edit all of them or the site goes inconsistent:
 Quick check that all five match:
 `grep -c 'x.com/thatboycodes' index.html blog/index.html blog/post.html focus/index.html`
 
-The header nav is duplicated the same way (all four files) — add a new
-page's link to each.
+The header nav is duplicated the same way (all five files, `habits/index.html`
+included) — add a new page's link to each. Seven links still fit one row on
+a 360px phone thanks to the `max-width: 420px` rule in `styles.css`; an
+eighth will wrap.
 
 ## Focus Desk (`focus/`)
 
@@ -139,8 +141,8 @@ and colour tokens from `/styles.css`.
 
 ## Habits (`habits/`)
 
-Unlisted (`noindex`, not in the nav), one self-contained file like Focus
-Desk, same tokens. Rule of the page: streaks are a side effect of honest
+In the site nav and linked from Focus Desk's top bar; `noindex` keeps it
+out of search results. One self-contained file like Focus Desk, same tokens. Rule of the page: streaks are a side effect of honest
 logging, so honest options are as easy as Full.
 
 - **Storage** is shared with Focus Desk under `habits:` keys:

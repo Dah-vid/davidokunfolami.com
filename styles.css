@@ -153,11 +153,11 @@ a {
   color: var(--paper);
 }
 
-/* six links fit one row on a 360px phone */
+/* seven links fit one row on a 360px phone */
 @media (max-width: 420px) {
   .site-header nav {
-    font-size: 0.9rem;
-    column-gap: 0.9rem;
+    font-size: 0.85rem;
+    column-gap: 0.7rem;
   }
 }
 
