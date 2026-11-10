@@ -1,5 +1,5 @@
 /* V-Taper offline service worker */
-var CACHE = "vtaper-v4"; /* bump this whenever any file below changes */
+var CACHE = "vtaper-v5"; /* bump this whenever any file below changes */
 var FILES = [
   "./",
   "./index.html",
