@@ -1,11 +1,13 @@
 /* V-Taper offline service worker */
-var CACHE = "vtaper-v3";
+var CACHE = "vtaper-v4"; /* bump this whenever any file below changes */
 var FILES = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
   "./icon-180.png",
-  "./icon-512.png"
+  "./icon-192.png",
+  "./icon-512.png",
+  "./archivo-expanded-black.woff2"
 ];
 
 self.addEventListener("install", function (e) {
@@ -14,7 +16,9 @@ self.addEventListener("install", function (e) {
     caches.open(CACHE).then(function (c) {
       return Promise.all(
         FILES.map(function (f) {
-          return c.add(f).catch(function () { /* ignore a missing optional file */ });
+          /* "reload" skips the browser's HTTP cache, so a new cache version gets the new
+             files, not copies GitHub Pages told the browser to keep for 10 minutes */
+          return c.add(new Request(f, { cache: "reload" })).catch(function () { /* ignore a missing optional file */ });
         })
       );
     })

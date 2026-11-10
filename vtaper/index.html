@@ -3,143 +3,165 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#14171A">
+<meta name="theme-color" content="#101214">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <meta name="apple-mobile-web-app-title" content="V-Taper">
 <title>V-Taper</title>
 <style>
+/* Restyled to match davidokunfolami.com: carbon / graphite / smoke / paper, Archivo Expanded
+   Black for display type, square corners, hairline rows instead of cards, outlined numerals.
+   The font is a copy of the site's, kept in this folder so the app stays self-contained offline. */
+@font-face{font-family:"Archivo";src:url("archivo-expanded-black.woff2") format("woff2");font-weight:900;font-stretch:125%;font-style:normal;font-display:swap}
 :root{
-  --ink:#14171A; --surface:#1E2226; --surface2:#262B31; --line:#333A41;
-  --text:#E8EBEE; --dim:#939CA5; --signal:#FFC53D; --done:#35C0A0; --rest:#58A6FF;
-  --pad:16px;
+  --carbon:#101214; --panel:#17191c; --graphite:#26292c; --smoke:#878d93; --paper:#eae7e1; --dark-smoke:#4a4e52;
+  --display:"Archivo","Arial Black",system-ui,sans-serif;
+  --pad:18px;
+  color-scheme:dark;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;padding:0;background:var(--ink);color:var(--text);
-  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif;
+[hidden]{display:none!important}
+html,body{margin:0;padding:0;background:var(--carbon);color:var(--paper);
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
   font-size:16px;line-height:1.45;overscroll-behavior-y:contain}
-body{padding-bottom:120px}
-button,input,select{font-family:inherit;font-size:inherit;color:inherit}
+body{padding-bottom:150px}
+button,input,select{font-family:inherit;font-size:inherit;color:inherit;border-radius:0}
+button{touch-action:manipulation}
+:focus-visible{outline:2px solid var(--paper);outline-offset:2px}
 .num{font-variant-numeric:tabular-nums}
+.disp{font-family:var(--display);font-weight:900;font-stretch:125%;text-transform:uppercase;letter-spacing:.01em}
+.eyebrow{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--smoke);font-weight:600}
 
 /* ---------- top bar ---------- */
-header{position:sticky;top:0;z-index:40;background:rgba(20,23,26,.94);
-  backdrop-filter:blur(12px);border-bottom:1px solid var(--line);
+header{position:sticky;top:0;z-index:40;background:rgba(16,18,20,.94);
+  -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);border-bottom:1px solid var(--graphite);
   padding:calc(env(safe-area-inset-top) + 10px) var(--pad) 10px}
-.bar{display:flex;align-items:center;gap:12px}
-.back{background:none;border:0;color:var(--dim);font-size:15px;padding:6px 2px;cursor:pointer}
-h1{margin:0;font-size:17px;font-weight:650;letter-spacing:-.01em;flex:1}
-.wk{background:var(--surface2);border:1px solid var(--line);border-radius:8px;
-  padding:6px 8px;font-size:13px;color:var(--text)}
+.bar{display:flex;align-items:center;gap:12px;min-height:40px}
+.back{background:none;border:0;color:var(--smoke);font-size:15px;padding:10px 4px 10px 0;cursor:pointer}
+h1{margin:0;font-family:var(--display);font-weight:900;font-stretch:125%;text-transform:uppercase;
+  font-size:18px;line-height:1;letter-spacing:.01em;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.clock{font-size:14px;color:var(--smoke);white-space:nowrap}
+.wk{background:var(--carbon);border:1px solid var(--graphite);padding:8px 8px;font-size:13px;color:var(--paper);-webkit-appearance:none;appearance:none}
 
-/* ---------- taper progress ---------- */
+/* ---------- taper progress: five square bars, done = paper, current = outlined ---------- */
 .taper{display:flex;gap:3px;margin-top:12px;align-items:flex-end;height:16px}
-.taper i{flex:1;background:var(--line);border-radius:2px;transition:background .25s}
+.taper i{flex:1;background:var(--graphite)}
 .taper i:nth-child(1){height:16px}.taper i:nth-child(2){height:14px}
 .taper i:nth-child(3){height:12px}.taper i:nth-child(4){height:10px}
 .taper i:nth-child(5){height:8px}
-.taper i.on{background:var(--done)}
-.taper i.now{background:var(--signal)}
+.taper i.on{background:var(--paper)}
+.taper i.now{background:transparent;box-shadow:inset 0 0 0 1px var(--paper)}
 
 main{padding:var(--pad)}
 
-/* ---------- home ---------- */
-.lede{color:var(--dim);font-size:14px;margin:2px 0 20px}
-.day{display:block;width:100%;text-align:left;background:var(--surface);
-  border:1px solid var(--line);border-left:3px solid var(--signal);border-radius:12px;
-  padding:14px 16px;margin-bottom:10px;cursor:pointer}
-.day.rest{border-left-color:var(--line);opacity:.55}
-.day b{display:block;font-size:17px;font-weight:640;margin-bottom:3px}
-.day span{color:var(--dim);font-size:13.5px}
-.day em{float:right;font-style:normal;color:var(--done);font-size:12px;font-weight:600}
-.sec{margin:26px 0 10px;font-size:12.5px;color:var(--dim);font-weight:600}
-.tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.tile{background:var(--surface);border:1px solid var(--line);border-radius:12px;
-  padding:13px 14px;text-align:left;cursor:pointer;font-size:14.5px;font-weight:550}
-.tile s{display:block;text-decoration:none;color:var(--dim);font-size:12.5px;font-weight:400;margin-top:2px}
+/* ---------- home: the days as big hairline rows, like the site's project list ---------- */
+.lede{color:var(--smoke);font-size:14px;margin:4px 0 18px}
+.day{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;align-items:baseline;
+  width:100%;text-align:left;background:none;color:var(--paper);border:0;border-top:1px solid var(--graphite);
+  padding:18px 4px;cursor:pointer}
+.day:last-of-type{border-bottom:1px solid var(--graphite)}
+.day b{font-family:var(--display);font-weight:900;font-stretch:125%;text-transform:uppercase;letter-spacing:.01em;
+  font-size:clamp(1.5rem,8vw,2.25rem);line-height:1}
+.day span{grid-column:1/-1;color:var(--smoke);font-size:14px}
+.day em{font-style:normal;color:var(--smoke);font-size:13px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.day.rest{cursor:default}
+.day.rest b{color:transparent;-webkit-text-stroke:1px var(--smoke);font-size:clamp(1rem,5vw,1.35rem)}
+.day:not(.rest):active{background:var(--paper);color:var(--carbon)}
+.day:not(.rest):active span,.day:not(.rest):active em{color:var(--dark-smoke)}
+@media (hover:hover){
+  .day:not(.rest):hover{background:var(--paper);color:var(--carbon)}
+  .day:not(.rest):hover span,.day:not(.rest):hover em{color:var(--dark-smoke)}
+}
+.sec{margin:30px 0 6px}
+.tiles{display:flex;flex-direction:column;border-bottom:1px solid var(--graphite)}
+.tile{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:baseline;gap:2px 12px;
+  background:none;color:var(--paper);border:0;border-top:1px solid var(--graphite);
+  padding:14px 4px;text-align:left;cursor:pointer;font-size:15px;font-weight:700}
+.tile::after{content:"\2192";color:var(--smoke);font-weight:400;grid-row:1;grid-column:2}
+.tile s{grid-column:1;text-decoration:none;color:var(--smoke);font-size:13px;font-weight:400}
+.tile:active{background:var(--paper);color:var(--carbon)}
+.tile:active s,.tile:active::after{color:var(--dark-smoke)}
 
 /* ---------- warm-up ---------- */
-.warm{background:var(--surface);border:1px solid var(--line);border-radius:12px;
-  padding:4px 14px;margin-bottom:18px}
-.warm h3{font-size:13px;color:var(--dim);margin:12px 0 8px;font-weight:600}
-.wrow{display:flex;align-items:center;gap:11px;padding:9px 0;border-bottom:1px solid var(--line);cursor:pointer}
-.warm .wrow:last-child{border-bottom:0}
-.tick{width:22px;height:22px;flex:0 0 22px;border:1.5px solid var(--line);border-radius:6px;
-  display:flex;align-items:center;justify-content:center;font-size:13px;color:transparent}
-.wrow.done .tick{background:var(--done);border-color:var(--done);color:var(--ink)}
-.wrow.done p{color:var(--dim);text-decoration:line-through}
-.wrow p{margin:0;font-size:14.5px;flex:1}
-.wrow p s{display:block;text-decoration:none;color:var(--dim);font-size:12.5px}
+.warm{border-top:1px solid var(--graphite);margin-bottom:26px}
+.warm h3{margin:14px 0 4px}
+.wrow{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--graphite);cursor:pointer}
+.tick{width:24px;height:24px;flex:0 0 24px;border:1px solid var(--smoke);
+  display:flex;align-items:center;justify-content:center;font-size:14px;color:transparent}
+.wrow.done .tick{background:var(--paper);border-color:var(--paper);color:var(--carbon)}
+.wrow.done p{color:var(--smoke);text-decoration:line-through}
+.wrow p{margin:0;font-size:15px;flex:1}
+.wrow p s{display:block;text-decoration:none;color:var(--smoke);font-size:13px}
 
 /* ---------- exercise ---------- */
-.ex{background:var(--surface);border:1px solid var(--line);border-radius:14px;
-  margin-bottom:12px;overflow:hidden}
-.ex.active{border-color:var(--signal)}
-.ex.complete{opacity:.6}
-.exh{display:flex;gap:12px;padding:14px;cursor:pointer;align-items:flex-start}
-.n{width:26px;height:26px;flex:0 0 26px;border-radius:7px;background:var(--surface2);
-  color:var(--dim);display:flex;align-items:center;justify-content:center;
-  font-size:13px;font-weight:650;margin-top:1px}
-.ex.active .n{background:var(--signal);color:var(--ink)}
-.ex.complete .n{background:var(--done);color:var(--ink)}
+.ex{border-top:1px solid var(--graphite);margin-bottom:6px;padding-left:0;transition:padding .2s}
+.ex.active{border-left:3px solid var(--paper);padding-left:12px}
+.ex.complete{opacity:.5}
+.exh{display:flex;gap:14px;padding:16px 0 6px;cursor:pointer;align-items:flex-start}
+.n{flex:0 0 auto;min-width:34px;font-family:var(--display);font-weight:900;font-stretch:125%;font-size:28px;line-height:.95;
+  color:transparent;-webkit-text-stroke:1px var(--smoke)}
+.ex.active .n{color:var(--paper);-webkit-text-stroke:0}
+.ex.complete .n{-webkit-text-stroke:1px var(--smoke)}
 .exh div{flex:1;min-width:0}
-.exh b{display:block;font-size:16px;font-weight:600;letter-spacing:-.01em}
-.meta{color:var(--dim);font-size:13px;margin-top:3px}
-.chev{color:var(--dim);font-size:13px;padding-top:3px}
+.exh b{display:block;font-size:17px;font-weight:700;letter-spacing:-.005em}
+.meta{color:var(--smoke);font-size:13px;margin-top:2px}
+.chev{border:1px solid var(--graphite);color:var(--smoke);font-size:12px;padding:5px 9px;white-space:nowrap;margin-top:1px}
+.ex.open .chev{background:var(--paper);border-color:var(--paper);color:var(--carbon)}
 
-.sets{padding:0 14px 14px}
-.srow{display:flex;align-items:center;gap:8px;margin-top:9px}
-.slab{width:26px;flex:0 0 26px;color:var(--dim);font-size:12.5px;text-align:center}
+.sets{padding:0 0 16px}
+.srow{display:flex;align-items:center;gap:8px;margin-top:8px}
+.slab{width:22px;flex:0 0 22px;color:var(--smoke);font-size:13px;text-align:center}
 .fld{flex:1;min-width:0;position:relative}
-.fld input{width:100%;background:var(--surface2);border:1px solid var(--line);
-  border-radius:9px;padding:11px 10px 11px 12px;font-size:16px;font-weight:600;
-  outline:none;text-align:left}
-.fld input:focus{border-color:var(--signal)}
+.fld input{width:100%;background:var(--panel);border:1px solid var(--graphite);
+  padding:12px 40px 12px 12px;font-size:17px;font-weight:600;outline:none;text-align:left;-webkit-appearance:none;appearance:none}
+.fld input::placeholder{color:var(--dark-smoke)}
+.fld input:focus{border-color:var(--paper)}
 .fld u{position:absolute;right:10px;top:50%;transform:translateY(-50%);
-  text-decoration:none;color:var(--dim);font-size:12px;pointer-events:none}
-.ok{width:46px;flex:0 0 46px;height:42px;border:1.5px solid var(--line);background:var(--surface2);
-  border-radius:9px;color:var(--dim);font-size:16px;cursor:pointer}
-.srow.done .ok{background:var(--done);border-color:var(--done);color:var(--ink)}
-.srow.done input{color:var(--dim)}
-.hint{color:var(--dim);font-size:12.5px;margin:10px 0 0}
-.hint b{color:var(--text);font-weight:600}
+  text-decoration:none;color:var(--smoke);font-size:12px;pointer-events:none}
+.ok{width:52px;flex:0 0 52px;height:48px;border:1px solid var(--smoke);background:none;
+  color:var(--smoke);font-size:18px;cursor:pointer}
+.srow.done .ok{background:var(--paper);border-color:var(--paper);color:var(--carbon)}
+.srow.done input{color:var(--smoke)}
+.hint{color:var(--smoke);font-size:13px;margin:10px 0 0 30px}
+.hint b{color:var(--paper);font-weight:600}
 
-.detail{border-top:1px solid var(--line);padding:13px 14px;background:var(--surface2);display:none}
+.detail{border:1px solid var(--graphite);padding:14px;background:var(--panel);display:none;margin:8px 0 6px}
 .ex.open .detail{display:block}
-.detail h4{margin:0 0 4px;font-size:12.5px;color:var(--signal);font-weight:650}
-.detail p{margin:0 0 12px;font-size:14px;color:var(--text)}
+.detail h4{margin:0 0 4px;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--smoke);font-weight:600}
+.detail p{margin:0 0 14px;font-size:15px;color:var(--paper)}
 .detail p:last-child{margin-bottom:0}
-.detail .sub{color:var(--dim);font-size:13.5px}
+.detail .sub{color:var(--smoke);font-size:14px}
 
-/* ---------- rest timer ---------- */
+/* ---------- rest timer: big digits; the whole panel inverts when rest is over ---------- */
 .timer{position:fixed;left:0;right:0;bottom:0;z-index:50;
-  background:rgba(30,34,38,.97);backdrop-filter:blur(12px);
-  border-top:1px solid var(--line);padding:12px var(--pad) calc(env(safe-area-inset-bottom) + 12px);
+  background:rgba(23,25,28,.97);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);
+  border-top:1px solid var(--graphite);padding:14px var(--pad) calc(env(safe-area-inset-bottom) + 14px);
   transform:translateY(110%);transition:transform .28s ease}
 .timer.up{transform:translateY(0)}
-.trow{display:flex;align-items:center;gap:14px}
-.tnum{font-size:32px;font-weight:680;letter-spacing:-.02em;color:var(--rest);min-width:96px}
-.tinfo{flex:1;font-size:13px;color:var(--dim)}
-.tbtn{background:var(--surface2);border:1px solid var(--line);border-radius:9px;
-  padding:10px 14px;font-size:14px;font-weight:600;cursor:pointer}
-.tbar{height:3px;background:var(--line);border-radius:2px;margin-top:10px;overflow:hidden}
-.tbar i{display:block;height:100%;background:var(--rest);width:100%;transition:width 1s linear}
-.timer.over .tnum{color:var(--done)}
-.timer.over .tbar i{background:var(--done)}
+.trow{display:flex;align-items:center;gap:12px}
+.tnum{font-family:var(--display);font-weight:900;font-stretch:125%;font-size:40px;line-height:1;letter-spacing:0;min-width:120px;font-variant-numeric:tabular-nums}
+.tinfo{flex:1;min-width:0;font-size:13px;color:var(--smoke)}
+.tbtn{background:none;border:1px solid var(--smoke);padding:12px 12px;font-size:14px;font-weight:700;cursor:pointer;min-height:46px}
+.tbar{height:3px;background:var(--graphite);margin-top:12px;overflow:hidden}
+.tbar i{display:block;height:100%;background:var(--paper);width:100%;transition:width .25s linear}
+.timer.over{background:var(--paper);color:var(--carbon);border-top-color:var(--paper)}
+.timer.over .tinfo{color:var(--dark-smoke)}
+.timer.over .tbtn{border-color:var(--carbon)}
+.timer.over .tbar{background:#c9c6c0}
 
-/* ---------- reference pages ---------- */
-.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;
-  padding:14px;margin-bottom:11px}
-.card h3{margin:0 0 6px;font-size:15px;font-weight:640}
-.card p{margin:0 0 9px;font-size:14px;color:var(--dim)}
-.card p:last-child{margin-bottom:0}
-.card p b{color:var(--text);font-weight:600}
-.finish{width:100%;background:var(--done);color:var(--ink);border:0;border-radius:12px;
-  padding:15px;font-size:16px;font-weight:680;margin-top:6px;cursor:pointer}
-.ghost{width:100%;background:none;color:var(--dim);border:1px solid var(--line);
-  border-radius:10px;padding:12px;font-size:14px;margin-top:10px;cursor:pointer}
+/* ---------- reference + session end ---------- */
+.card{border-top:1px solid var(--graphite);padding:16px 0 6px}
+.card h3{margin:0 0 8px;font-family:var(--display);font-weight:900;font-stretch:125%;text-transform:uppercase;font-size:16px;line-height:1.15;letter-spacing:.01em}
+.card p{margin:0 0 10px;font-size:15px;color:var(--smoke)}
+.card p b{color:var(--paper);font-weight:600}
+.finish{width:100%;background:var(--paper);color:var(--carbon);border:0;padding:17px;margin-top:22px;cursor:pointer;
+  font-family:var(--display);font-weight:900;font-stretch:125%;text-transform:uppercase;font-size:16px;letter-spacing:.02em}
+.finish:active{filter:brightness(.85)}
+.ghost{width:100%;background:none;color:var(--smoke);border:1px solid var(--graphite);padding:13px;font-size:14px;margin-top:10px;cursor:pointer}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -149,6 +171,7 @@ main{padding:var(--pad)}
   <div class="bar">
     <button class="back" id="back" hidden>Back</button>
     <h1 id="title">V-Taper</h1>
+    <span class="clock num" id="clock" title="Session time" hidden></span>
     <select class="wk" id="week" title="Training week"></select>
   </div>
   <div class="taper" id="taper" hidden><i></i><i></i><i></i><i></i><i></i></div>
@@ -158,8 +181,8 @@ main{padding:var(--pad)}
 
 <div class="timer" id="timer">
   <div class="trow">
-    <div class="tnum num" id="tnum">2:00</div>
-    <div class="tinfo" id="tinfo">Rest</div>
+    <div class="tnum num" id="tnum" role="timer" aria-live="off">2:00</div>
+    <div class="tinfo" id="tinfo" aria-live="polite">Rest</div>
     <button class="tbtn" id="tadd">+30s</button>
     <button class="tbtn" id="tskip">Skip</button>
   </div>
@@ -247,6 +270,7 @@ function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;")}
 function rirText(){for(var i=0;i<WEEKS.length;i++)if(WEEKS[i].v===week)return WEEKS[i].rir;return""}
 
 function render(){
+  paintClock();
   if(page==="home")return home();
   if(page==="day")return session(day);
   if(page==="ref")return reference();
@@ -259,11 +283,11 @@ function home(){
   order.forEach(function(p){
     var d=DAYS[p[0]], lg=logFor(p[0]), n=0, tot=0;
     d.ex.forEach(function(e,i){tot+=e.sets;for(var s=0;s<e.sets;s++)if(lg[i+"_"+s+"_done"])n++});
-    h+='<button class="day" data-go="'+p[0]+'"><b>'+p[1]+' &middot; '+esc(d.name)+
-       (n>0?'<em>'+n+'/'+tot+' sets</em>':'')+'</b><span>'+esc(d.sub)+'</span></button>';
+    h+='<button class="day" data-go="'+p[0]+'"><b>'+p[1]+'</b>'+
+       (n>0?'<em>'+n+'/'+tot+' sets</em>':'')+'<span>'+esc(d.name)+' &middot; '+esc(d.sub)+'</span></button>';
   });
-  h+='<button class="day rest"><b>Wednesday, Saturday, Sunday</b><span>Rest. This is when the muscle is built.</span></button>';
-  h+='<div class="sec">Reference</div><div class="tiles">'+
+  h+='<button class="day rest" tabindex="-1"><b>Wed, Sat, Sun</b><span>Rest. This is when the muscle is built.</span></button>';
+  h+='<div class="sec eyebrow">Reference</div><div class="tiles">'+
      '<button class="tile" data-ref="1">Shorter sessions<s>60 min and 30 min</s></button>'+
      '<button class="tile" data-ref="1">No gym today<s>Home bodyweight</s></button>'+
      '<button class="tile" data-ref="1">What is RIR<s>And rest times</s></button>'+
@@ -280,7 +304,7 @@ function session(d){
   back.hidden=false; taper.hidden=false;
   title.textContent=D.name;
 
-  var h='<div class="warm"><h3>Warm-up, every session</h3>';
+  var h='<div class="warm"><h3 class="eyebrow">Warm-up, every session</h3>';
   WARM.forEach(function(w,i){
     h+='<div class="wrow'+(lg["w"+i]?" done":"")+'" data-w="'+i+'"><span class="tick">&#10003;</span>'+
        '<p>'+esc(w.t)+'<s>'+esc(w.s)+'</s></p></div>';
@@ -330,7 +354,7 @@ function session(d){
 
   [].forEach.call(view.querySelectorAll("[data-w]"),function(el){
     el.onclick=function(){var k=el.getAttribute("data-w");var o=logFor(d);
-      var kk=(k==="r")?"wr":("w"+k); o[kk]=!o[kk]; saveLog(d,o); session(d)}});
+      var kk=(k==="r")?"wr":("w"+k); o[kk]=!o[kk]; if(!o._start)o._start=Date.now(); saveLog(d,o); session(d)}});
 
   [].forEach.call(view.querySelectorAll("[data-open]"),function(el){
     el.onclick=function(){el.parentNode.classList.toggle("open")}});
@@ -344,7 +368,8 @@ function session(d){
       var id=el.getAttribute("data-tick"), o=logFor(d);
       [].forEach.call(view.querySelectorAll("input[data-f]"),function(inp){
         o[inp.getAttribute("data-f")]=inp.value});
-      var was=o[id+"_done"]; o[id+"_done"]=!was; saveLog(d,o);
+      var was=o[id+"_done"]; o[id+"_done"]=!was; if(!o._start)o._start=Date.now(); saveLog(d,o);
+      unlockSound();
       if(!was) startTimer(parseInt(el.getAttribute("data-rest"),10));
       session(d);
     }});
@@ -408,31 +433,69 @@ var timer=document.getElementById("timer"), tnum=document.getElementById("tnum")
 function fmt(s){var m=Math.floor(Math.abs(s)/60),x=Math.abs(s)%60;
   return (s<0?"+":"")+m+":"+(x<10?"0":"")+x}
 
+/* The timer counts against an end time, not by ticking down, so it stays right when the phone
+   locks or the app is closed and reopened (iOS pauses timers in the background). It's saved as
+   "rest" = {end, total, rang}. */
+var rest=null, wakeLock=null, actx=null;
+function unlockSound(){ // must run inside a tap, or iOS keeps the audio muted
+  try{ if(!actx) actx=new (window.AudioContext||window.webkitAudioContext)(); if(actx.state==="suspended") actx.resume(); }catch(e){}
+}
+function beep(){ // two short tones; plays alongside music and respects the silent switch
+  try{ if(!actx) return; var t=actx.currentTime;
+    [0,0.22].forEach(function(o){ var g=actx.createGain(), osc=actx.createOscillator(); osc.type="sine"; osc.frequency.value=880;
+      g.gain.setValueAtTime(0.0001,t+o); g.gain.exponentialRampToValueAtTime(0.35,t+o+0.02); g.gain.exponentialRampToValueAtTime(0.0001,t+o+0.18);
+      osc.connect(g); g.connect(actx.destination); osc.start(t+o); osc.stop(t+o+0.2); });
+  }catch(e){}
+}
+function keepAwake(on){ // screen stays on while resting, so you see (and hear) the end of the rest
+  try{
+    if(on && !wakeLock && navigator.wakeLock && document.visibilityState==="visible")
+      navigator.wakeLock.request("screen").then(function(l){ wakeLock=l; l.addEventListener("release",function(){ wakeLock=null }); }).catch(function(){});
+    if(!on && wakeLock){ wakeLock.release().catch(function(){}); wakeLock=null; }
+  }catch(e){}
+}
 function startTimer(sec){
-  stopTimer(); tTotal=sec; tLeft=sec;
-  timer.classList.add("up"); timer.classList.remove("over");
-  tinfo.textContent="Rest before the next set";
+  stopTimer(); rest={end:Date.now()+sec*1000, total:sec, rang:false}; store.set("rest",rest);
+  timer.classList.add("up"); keepAwake(true); tick();
+  timerId=setInterval(tick,250);
+}
+function tick(){
+  if(!rest) return;
+  tLeft=Math.ceil((rest.end-Date.now())/1000); tTotal=rest.total;
+  if(tLeft<-120) return stopTimer();
+  var over=tLeft<=0;
+  timer.classList.toggle("over",over);
+  tinfo.textContent=over?"Rest complete, go again":"Rest before the next set";
+  if(over && !rest.rang){
+    rest.rang=true; store.set("rest",rest);
+    if(tLeft>-3){ beep(); if(navigator.vibrate) navigator.vibrate([180,90,180]); } // not when reopening long after
+    keepAwake(false);
+  }
   paint();
-  timerId=setInterval(function(){
-    tLeft--; paint();
-    if(tLeft===0){
-      timer.classList.add("over"); tinfo.textContent="Rest complete, go again";
-      if(navigator.vibrate) navigator.vibrate([180,90,180]);
-    }
-    if(tLeft<-120) stopTimer();
-  },1000);
 }
 function paint(){
   tnum.textContent=fmt(tLeft);
   var p=tLeft>0?(tLeft/tTotal*100):0; tbar.style.width=Math.max(0,p)+"%";
 }
-function stopTimer(){if(timerId)clearInterval(timerId);timerId=null;timer.classList.remove("up","over")}
+function stopTimer(){if(timerId)clearInterval(timerId);timerId=null;rest=null;store.set("rest",null);keepAwake(false);timer.classList.remove("up","over")}
 document.getElementById("tskip").onclick=stopTimer;
-document.getElementById("tadd").onclick=function(){tLeft+=30;tTotal+=30;
-  timer.classList.remove("over");tinfo.textContent="Rest before the next set";paint()};
+document.getElementById("tadd").onclick=function(){ if(!rest) return; unlockSound();
+  rest.end+=30000; rest.total+=30; if(rest.end>Date.now()){ rest.rang=false; keepAwake(true); } store.set("rest",rest); tick()};
+
+/* session clock in the header: starts at the first ticked warm-up or set, cleared by Finish */
+var clock=document.getElementById("clock");
+function paintClock(){
+  var s=page==="day" && logFor(day)._start;
+  clock.hidden=!s; if(s) clock.textContent=fmt(Math.floor((Date.now()-s)/1000));
+}
+setInterval(paintClock,1000);
+
+document.addEventListener("visibilitychange",function(){ if(document.visibilityState==="visible"){ tick(); paintClock(); if(rest && Date.now()<rest.end) keepAwake(true); } });
 
 back.onclick=function(){stopTimer();page="home";window.scrollTo(0,0);render()};
 render();
+// a rest that was running when the app was closed carries on
+(function(){ var r=store.get("rest"); if(r && r.end && Date.now()-r.end < 120000){ rest=r; timer.classList.add("up"); if(Date.now()<r.end) keepAwake(true); tick(); timerId=setInterval(tick,250); } else store.set("rest",null); })();
 </script>
 
 <script>
