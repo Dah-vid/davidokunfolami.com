@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#14171A">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-title" content="V-Taper">
+<title>V-Taper</title>
+<style>
+:root{
+  --ink:#14171A; --surface:#1E2226; --surface2:#262B31; --line:#333A41;
+  --text:#E8EBEE; --dim:#939CA5; --signal:#FFC53D; --done:#35C0A0; --rest:#58A6FF;
+  --pad:16px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;background:var(--ink);color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif;
+  font-size:16px;line-height:1.45;overscroll-behavior-y:contain}
+body{padding-bottom:120px}
+button,input,select{font-family:inherit;font-size:inherit;color:inherit}
+.num{font-variant-numeric:tabular-nums}
+
+/* ---------- top bar ---------- */
+header{position:sticky;top:0;z-index:40;background:rgba(20,23,26,.94);
+  backdrop-filter:blur(12px);border-bottom:1px solid var(--line);
+  padding:calc(env(safe-area-inset-top) + 10px) var(--pad) 10px}
+.bar{display:flex;align-items:center;gap:12px}
+.back{background:none;border:0;color:var(--dim);font-size:15px;padding:6px 2px;cursor:pointer}
+h1{margin:0;font-size:17px;font-weight:650;letter-spacing:-.01em;flex:1}
+.wk{background:var(--surface2);border:1px solid var(--line);border-radius:8px;
+  padding:6px 8px;font-size:13px;color:var(--text)}
+
+/* ---------- taper progress ---------- */
+.taper{display:flex;gap:3px;margin-top:12px;align-items:flex-end;height:16px}
+.taper i{flex:1;background:var(--line);border-radius:2px;transition:background .25s}
+.taper i:nth-child(1){height:16px}.taper i:nth-child(2){height:14px}
+.taper i:nth-child(3){height:12px}.taper i:nth-child(4){height:10px}
+.taper i:nth-child(5){height:8px}
+.taper i.on{background:var(--done)}
+.taper i.now{background:var(--signal)}
+
+main{padding:var(--pad)}
+
+/* ---------- home ---------- */
+.lede{color:var(--dim);font-size:14px;margin:2px 0 20px}
+.day{display:block;width:100%;text-align:left;background:var(--surface);
+  border:1px solid var(--line);border-left:3px solid var(--signal);border-radius:12px;
+  padding:14px 16px;margin-bottom:10px;cursor:pointer}
+.day.rest{border-left-color:var(--line);opacity:.55}
+.day b{display:block;font-size:17px;font-weight:640;margin-bottom:3px}
+.day span{color:var(--dim);font-size:13.5px}
+.day em{float:right;font-style:normal;color:var(--done);font-size:12px;font-weight:600}
+.sec{margin:26px 0 10px;font-size:12.5px;color:var(--dim);font-weight:600}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:12px;
+  padding:13px 14px;text-align:left;cursor:pointer;font-size:14.5px;font-weight:550}
+.tile s{display:block;text-decoration:none;color:var(--dim);font-size:12.5px;font-weight:400;margin-top:2px}
+
+/* ---------- warm-up ---------- */
+.warm{background:var(--surface);border:1px solid var(--line);border-radius:12px;
+  padding:4px 14px;margin-bottom:18px}
+.warm h3{font-size:13px;color:var(--dim);margin:12px 0 8px;font-weight:600}
+.wrow{display:flex;align-items:center;gap:11px;padding:9px 0;border-bottom:1px solid var(--line);cursor:pointer}
+.warm .wrow:last-child{border-bottom:0}
+.tick{width:22px;height:22px;flex:0 0 22px;border:1.5px solid var(--line);border-radius:6px;
+  display:flex;align-items:center;justify-content:center;font-size:13px;color:transparent}
+.wrow.done .tick{background:var(--done);border-color:var(--done);color:var(--ink)}
+.wrow.done p{color:var(--dim);text-decoration:line-through}
+.wrow p{margin:0;font-size:14.5px;flex:1}
+.wrow p s{display:block;text-decoration:none;color:var(--dim);font-size:12.5px}
+
+/* ---------- exercise ---------- */
+.ex{background:var(--surface);border:1px solid var(--line);border-radius:14px;
+  margin-bottom:12px;overflow:hidden}
+.ex.active{border-color:var(--signal)}
+.ex.complete{opacity:.6}
+.exh{display:flex;gap:12px;padding:14px;cursor:pointer;align-items:flex-start}
+.n{width:26px;height:26px;flex:0 0 26px;border-radius:7px;background:var(--surface2);
+  color:var(--dim);display:flex;align-items:center;justify-content:center;
+  font-size:13px;font-weight:650;margin-top:1px}
+.ex.active .n{background:var(--signal);color:var(--ink)}
+.ex.complete .n{background:var(--done);color:var(--ink)}
+.exh div{flex:1;min-width:0}
+.exh b{display:block;font-size:16px;font-weight:600;letter-spacing:-.01em}
+.meta{color:var(--dim);font-size:13px;margin-top:3px}
+.chev{color:var(--dim);font-size:13px;padding-top:3px}
+
+.sets{padding:0 14px 14px}
+.srow{display:flex;align-items:center;gap:8px;margin-top:9px}
+.slab{width:26px;flex:0 0 26px;color:var(--dim);font-size:12.5px;text-align:center}
+.fld{flex:1;min-width:0;position:relative}
+.fld input{width:100%;background:var(--surface2);border:1px solid var(--line);
+  border-radius:9px;padding:11px 10px 11px 12px;font-size:16px;font-weight:600;
+  outline:none;text-align:left}
+.fld input:focus{border-color:var(--signal)}
+.fld u{position:absolute;right:10px;top:50%;transform:translateY(-50%);
+  text-decoration:none;color:var(--dim);font-size:12px;pointer-events:none}
+.ok{width:46px;flex:0 0 46px;height:42px;border:1.5px solid var(--line);background:var(--surface2);
+  border-radius:9px;color:var(--dim);font-size:16px;cursor:pointer}
+.srow.done .ok{background:var(--done);border-color:var(--done);color:var(--ink)}
+.srow.done input{color:var(--dim)}
+.hint{color:var(--dim);font-size:12.5px;margin:10px 0 0}
+.hint b{color:var(--text);font-weight:600}
+
+.detail{border-top:1px solid var(--line);padding:13px 14px;background:var(--surface2);display:none}
+.ex.open .detail{display:block}
+.detail h4{margin:0 0 4px;font-size:12.5px;color:var(--signal);font-weight:650}
+.detail p{margin:0 0 12px;font-size:14px;color:var(--text)}
+.detail p:last-child{margin-bottom:0}
+.detail .sub{color:var(--dim);font-size:13.5px}
+
+/* ---------- rest timer ---------- */
+.timer{position:fixed;left:0;right:0;bottom:0;z-index:50;
+  background:rgba(30,34,38,.97);backdrop-filter:blur(12px);
+  border-top:1px solid var(--line);padding:12px var(--pad) calc(env(safe-area-inset-bottom) + 12px);
+  transform:translateY(110%);transition:transform .28s ease}
+.timer.up{transform:translateY(0)}
+.trow{display:flex;align-items:center;gap:14px}
+.tnum{font-size:32px;font-weight:680;letter-spacing:-.02em;color:var(--rest);min-width:96px}
+.tinfo{flex:1;font-size:13px;color:var(--dim)}
+.tbtn{background:var(--surface2);border:1px solid var(--line);border-radius:9px;
+  padding:10px 14px;font-size:14px;font-weight:600;cursor:pointer}
+.tbar{height:3px;background:var(--line);border-radius:2px;margin-top:10px;overflow:hidden}
+.tbar i{display:block;height:100%;background:var(--rest);width:100%;transition:width 1s linear}
+.timer.over .tnum{color:var(--done)}
+.timer.over .tbar i{background:var(--done)}
+
+/* ---------- reference pages ---------- */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;
+  padding:14px;margin-bottom:11px}
+.card h3{margin:0 0 6px;font-size:15px;font-weight:640}
+.card p{margin:0 0 9px;font-size:14px;color:var(--dim)}
+.card p:last-child{margin-bottom:0}
+.card p b{color:var(--text);font-weight:600}
+.finish{width:100%;background:var(--done);color:var(--ink);border:0;border-radius:12px;
+  padding:15px;font-size:16px;font-weight:680;margin-top:6px;cursor:pointer}
+.ghost{width:100%;background:none;color:var(--dim);border:1px solid var(--line);
+  border-radius:10px;padding:12px;font-size:14px;margin-top:10px;cursor:pointer}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="bar">
+    <button class="back" id="back" hidden>Back</button>
+    <h1 id="title">V-Taper</h1>
+    <select class="wk" id="week" title="Training week"></select>
+  </div>
+  <div class="taper" id="taper" hidden><i></i><i></i><i></i><i></i><i></i></div>
+</header>
+
+<main id="view"></main>
+
+<div class="timer" id="timer">
+  <div class="trow">
+    <div class="tnum num" id="tnum">2:00</div>
+    <div class="tinfo" id="tinfo">Rest</div>
+    <button class="tbtn" id="tadd">+30s</button>
+    <button class="tbtn" id="tskip">Skip</button>
+  </div>
+  <div class="tbar"><i id="tbar"></i></div>
+</div>
+
+<script>
+/* ---------- storage: localStorage when available, memory otherwise ---------- */
+var mem={};
+var store={
+  get:function(k){try{var v=localStorage.getItem(k);return v?JSON.parse(v):null}
+    catch(e){return mem[k]!==undefined?mem[k]:null}},
+  set:function(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){mem[k]=v}}
+};
+
+/* ---------- programme data ---------- */
+var WARM=[
+ {t:"Pulse raiser",s:"3-4 min easy incline walk, rower or bike"},
+ {t:"Arm circles",s:"10 forward, 10 backward"},
+ {t:"Band pull-aparts",s:"2 x 15, squeeze the shoulder blades"},
+ {t:"Bodyweight squats",s:"10, slow and deep"},
+ {t:"Dead hang",s:"20-30 sec from any bar"}
+];
+
+var DAYS={
+ mon:{name:"Push A",sub:"Press, width, triceps",ramp:"Overhead press ramp: empty bar x 10, then 50% x 6, then 75% x 3",
+  ex:[
+   {n:"Overhead Press",sr:"3 x 5-8",sets:3,rest:150,cue:"Brace hard, squeeze glutes, press around the head not in front of it. Finish with the bar over the back of your head.",feel:"At lockout the bar feels weightless over mid-foot. Delts fatigue first, then triceps. No lower-back arch.",sub:"Seated DB press, machine shoulder press, landmine press"},
+   {n:"Cable Lateral Raise",sr:"3 x 12-18",sets:3,rest:105,cue:"Lowest pulley, lightest plates. For the right arm, stand with your left side to the machine, handle in the right hand, cable across your thighs. Start with the hand in front of the far thigh, raise out to the side and slightly forward, elbow first, to shoulder height. Lower 2-3 seconds.",feel:"Burn on the side cap of the shoulder, traps quiet. Self-check: if your hand is above your elbow at the top, you led with the hand.",sub:"DB lateral raise, machine lateral raise, lean-away DB raise"},
+   {n:"Incline DB Press",sr:"3 x 8-12",sets:3,rest:150,cue:"Bench at 30 degrees, not 45. Pin the shoulder blades back and down into the bench and keep them there all set. Elbows 45 degrees from the torso, lower to the upper-chest line, stop just short of lockout, and think squeeze the DBs together on the way up.",feel:"Stretch across the upper chest at the bottom, chest fatigues before the front delts. Not feeling it? Drop the weight 20 percent, 3 seconds down, and do one light set of flys first to wake it up.",sub:"Low-incline barbell or Smith press, incline machine press"},
+   {n:"Overhead Triceps Extension",sr:"3 x 10-15",sets:3,rest:105,cue:"Rope on the low pulley, back to the stack, split stance. Hinge the torso forward 30-45 degrees with a flat back. Upper arms up beside the ears pointing forward, hands behind the head. Only the forearm hinges.",feel:"A real pull down the back of the upper arm each rep. Nothing felt in the shoulders or lats.",sub:"Two-hand DB overhead extension, EZ skullcrusher lowered behind the head. A pushdown is NOT a substitute here."},
+   {n:"Smith Squat (feet forward)",sr:"3 x 8-12",sets:3,rest:150,cue:"Bar on the upper traps, safety stops set. Feet 20-30 cm in front of the bar, shoulder-width, toes slightly out. Lower 2-3 seconds to at least parallel, knees over toes, heels down. Stop just short of locked knees.",feel:"Stretch down the front of the thighs, quads burning by the last reps. Your back leans into the bar; hands only steady it. Heels lifting means feet go further forward.",sub:"Leg press, front squat, goblet squat with heels raised"}
+  ]},
+ tue:{name:"Pull A",sub:"Width, thickness, biceps",ramp:"Pull-up ramp: light pulldown x 10-12, then 3-4 crisp bodyweight pull-ups, then add weight",
+  ex:[
+   {n:"Weighted Pull-up",sr:"3 x 6-10",sets:3,rest:150,cue:"Start from a dead hang, blades set down first. Drive the elbows down into your back pockets.",feel:"Sides of the back switch on before rep 1 and stay on. Outer back pumped after, not the arms.",sub:"Lat pulldown (any wide handle), assisted pull-up machine, single-arm kneeling cable pulldown"},
+   {n:"DB Chest-Supported Row",sr:"3 x 8-12",sets:3,rest:150,cue:"Incline bench at 30-45 degrees, face down, chest at the top of the pad, feet planted behind. DBs hang, palms facing. Pull elbows to your back pockets, squeeze 1 second, lower 2 seconds.",feel:"If your chest lifts off the pad you cheated. Blades spread at the bottom, mid-back tires before the biceps. DBs hitting the frame means raise the incline.",sub:"Single-arm DB row with hand and knee on a flat bench, seated cable row, T-bar row"},
+   {n:"Cable Lat Pullover",sr:"3 x 12-15",sets:3,rest:105,cue:"Arms nearly straight and fixed, hinge forward 30-45 degrees, pull in an arc to your thighs.",feel:"Stretch from armpit down the ribs at the top. If you feel that, it is working. Zero biceps.",sub:"DB pullover across a bench, machine pullover, straight-arm pulldown"},
+   {n:"Incline DB Curl",sr:"3 x 8-12",sets:3,rest:105,cue:"Bench at 45-55 degrees. Let the arms hang behind the torso. Elbows point at the floor and stay there.",feel:"Distinct stretch down the front of the upper arm at the dead hang. Burn sits high, near the shoulder.",sub:"Bayesian cable curl, seated curl on a reclined bench. A preacher curl is NOT a substitute here."},
+   {n:"Romanian Deadlift",sr:"3 x 8-10",sets:3,rest:150,cue:"Form breaking with weight? Do the broomstick and wall hinge drills for two weeks with 8-10 kg DBs to knee height, seated leg curls as the leg slot meanwhile. Then: hips back, knees soft and frozen, bar dragging on the thighs, flat back.",feel:"Lower only until you feel a strong hamstring stretch, then reverse. Next-day soreness is hamstrings, not lower back.",sub:"DB RDL, seated leg curl, 45-degree back extension"}
+  ]},
+ thu:{name:"Push B",sub:"Width emphasis, triceps",ramp:"Seated DB press ramp: very light DBs x 12, then 60-70% x 5",
+  ex:[
+   {n:"Seated DB Shoulder Press",sr:"3 x 8-12",sets:3,rest:150,cue:"Seat at 75-85 degrees, one notch back from upright. Forearms vertical under the DBs. Press up and slightly together to a full lockout.",feel:"The DB feels balanced on a stacked forearm. If your lower back peels off the pad, it is too heavy.",sub:"Machine shoulder press, standing overhead press, landmine press"},
+   {n:"DB Lateral Raise",sr:"3 x 12-18",sets:3,rest:105,cue:"Slight forward lean, soft elbows. A string on the elbow pulls it up and out, the hand follows underneath. Elbow stays the highest point. Two second lowering.",feel:"Push the blades down before the set so the traps cannot shrug. Burn on the outside of the shoulder.",sub:"Cable lateral raise, machine lateral raise, lean-away DB raise"},
+   {n:"Dips (assisted first)",sr:"3 x 8-12",sets:3,rest:150,cue:"HARD RULE: upper arms parallel to the floor and no lower, shoulder never below the elbow. Elbows track back, shoulders stay down away from the ears, lean 20-30 degrees, 2-3 seconds down. Weeks 1-4 on the assisted machine only.",feel:"Stretch across the lower chest at the bottom, never a pull or pinch. Any pinch in the pec or front shoulder: stop the set and swap to close-grip bench.",sub:"Assisted dip machine, close-grip bench press, flat or decline DB press"},
+   {n:"Cable Rope Pushdown",sr:"3 x 12-15",sets:3,rest:105,cue:"Rope on the top pulley. Elbows pinned to your sides like a note is trapped there. Spread the rope at the bottom, squeeze.",feel:"Only the forearms move. The horseshoe on the outer upper arm contracts hard at lockout.",sub:"Straight-bar pushdown, single-arm cable pushdown, triceps extension machine"},
+   {n:"Leg Press",sr:"3 x 12-20",sets:3,rest:150,cue:"Lower back glued to the pad, feet low and shoulder-width. Press through the whole foot, never slam the lockout.",feel:"The moment your tailbone starts to lift is your depth. Quad burn above the knees.",sub:"Hack squat, Smith squat with feet forward, goblet squat or belt squat"}
+  ]},
+ fri:{name:"Pull B",sub:"Width, back detail, arms",ramp:"Pulldown ramp: 40% of working weight x 12, then 70% x 5",
+  ex:[
+   {n:"Neutral-Grip Lat Pulldown",sr:"3 x 10-14",sets:3,rest:150,cue:"Set the blades down, drive elbows to your hips, let the arms stretch fully overhead each rep.",feel:"Every rep ends with the taut feeling down the sides of the back. Lean stays fixed.",sub:"Neutral-grip pull-up, wide pulldown, single-arm cable pulldown"},
+   {n:"Seated Cable Row (wide)",sr:"3 x 10-14",sets:3,rest:150,cue:"Sit so the stack is already lifted a few cm at full arm stretch. Sit tall, pull wide to the upper abdomen, elbows 45-60 degrees, hard blade squeeze.",feel:"Torso angle identical at the start and end of every rep. If you are further back by rep 5, you are leaning.",sub:"Machine row (wide), chest-supported DB row, T-bar row"},
+   {n:"Face Pull",sr:"3 x 15-20",sets:3,rest:105,cue:"Rope at eye height, pull to your eyes with high wide elbows, split the rope, one second pause.",feel:"Knuckles beside your ears at the peak. If it lands at your chin, the biceps take over.",sub:"Reverse pec deck, rear-delt DB fly on an incline bench, band pull-aparts"},
+   {n:"Hammer Curl",sr:"3 x 10-14",sets:3,rest:105,cue:"Neutral grip throughout, elbows touching your sides, no swing. Two second lowering.",feel:"Pump sits lower and more to the outside than a normal curl. Elbow contact on the ribs is your sensor.",sub:"Rope cable hammer curl, cross-body hammer curl, reverse-grip EZ curl"},
+   {n:"Bulgarian Split Squat",sr:"2 x 10-12 each leg",sets:2,rest:105,cue:"Long stride, rear foot laces-down on a bench, slight forward lean. Drive through the front heel.",feel:"Long stride gives a glute stretch and a heavy front heel. Short stride burns only the quad and lifts the heel.",sub:"Walking lunge, reverse lunge, step-up, single-leg press"}
+  ]}
+};
+
+var WEEKS=[
+ {v:"1",l:"Week 1-2",rir:"2-3 RIR everywhere. Set your baselines."},
+ {v:"3",l:"Week 3-5",rir:"1-2 RIR. Double progression running."},
+ {v:"6",l:"Week 6-8",rir:"Isolations 0-1 RIR, compounds 1-2 RIR."},
+ {v:"9",l:"Deload",rir:"Cut sets by half, moderate loads, stay well shy of failure."}
+];
+
+/* ---------- state ---------- */
+var page="home", day=null, timerId=null, tLeft=0, tTotal=0;
+var week=store.get("week")||"1";
+function key(d){return "log_"+d}
+function logFor(d){return store.get(key(d))||{}}
+function saveLog(d,o){store.set(key(d),o)}
+function prev(d){return store.get("prev_"+d)||{}}
+
+/* ---------- render ---------- */
+var view=document.getElementById("view"), title=document.getElementById("title"),
+    back=document.getElementById("back"), taper=document.getElementById("taper"),
+    wsel=document.getElementById("week");
+
+WEEKS.forEach(function(w){var o=document.createElement("option");o.value=w.v;o.textContent=w.l;wsel.appendChild(o)});
+wsel.value=week;
+wsel.onchange=function(){week=wsel.value;store.set("week",week);render()};
+
+function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;")}
+function rirText(){for(var i=0;i<WEEKS.length;i++)if(WEEKS[i].v===week)return WEEKS[i].rir;return""}
+
+function render(){
+  if(page==="home")return home();
+  if(page==="day")return session(day);
+  if(page==="ref")return reference();
+}
+
+function home(){
+  back.hidden=true; taper.hidden=true; title.textContent="V-Taper";
+  var order=[["mon","Monday"],["tue","Tuesday"],["thu","Thursday"],["fri","Friday"]];
+  var h='<p class="lede">'+esc(rirText())+'</p>';
+  order.forEach(function(p){
+    var d=DAYS[p[0]], lg=logFor(p[0]), n=0, tot=0;
+    d.ex.forEach(function(e,i){tot+=e.sets;for(var s=0;s<e.sets;s++)if(lg[i+"_"+s+"_done"])n++});
+    h+='<button class="day" data-go="'+p[0]+'"><b>'+p[1]+' &middot; '+esc(d.name)+
+       (n>0?'<em>'+n+'/'+tot+' sets</em>':'')+'</b><span>'+esc(d.sub)+'</span></button>';
+  });
+  h+='<button class="day rest"><b>Wednesday, Saturday, Sunday</b><span>Rest. This is when the muscle is built.</span></button>';
+  h+='<div class="sec">Reference</div><div class="tiles">'+
+     '<button class="tile" data-ref="1">Shorter sessions<s>60 min and 30 min</s></button>'+
+     '<button class="tile" data-ref="1">No gym today<s>Home bodyweight</s></button>'+
+     '<button class="tile" data-ref="1">What is RIR<s>And rest times</s></button>'+
+     '<button class="tile" data-ref="1">Top 3 lifts<s>And weak links</s></button></div>';
+  view.innerHTML=h;
+  [].forEach.call(view.querySelectorAll("[data-go]"),function(b){
+    b.onclick=function(){day=b.getAttribute("data-go");page="day";window.scrollTo(0,0);render()}});
+  [].forEach.call(view.querySelectorAll("[data-ref]"),function(b){
+    b.onclick=function(){page="ref";window.scrollTo(0,0);render()}});
+}
+
+function session(d){
+  var D=DAYS[d], lg=logFor(d), pv=prev(d);
+  back.hidden=false; taper.hidden=false;
+  title.textContent=D.name;
+
+  var h='<div class="warm"><h3>Warm-up, every session</h3>';
+  WARM.forEach(function(w,i){
+    h+='<div class="wrow'+(lg["w"+i]?" done":"")+'" data-w="'+i+'"><span class="tick">&#10003;</span>'+
+       '<p>'+esc(w.t)+'<s>'+esc(w.s)+'</s></p></div>';
+  });
+  h+='<div class="wrow'+(lg["wr"]?" done":"")+'" data-w="r"><span class="tick">&#10003;</span>'+
+     '<p>Ramp into exercise 1<s>'+esc(D.ramp)+'</s></p></div></div>';
+
+  var firstOpen=-1;
+  D.ex.forEach(function(e,i){
+    var doneN=0; for(var s=0;s<e.sets;s++) if(lg[i+"_"+s+"_done"]) doneN++;
+    if(firstOpen<0 && doneN<e.sets) firstOpen=i;
+  });
+
+  D.ex.forEach(function(e,i){
+    var doneN=0; for(var s=0;s<e.sets;s++) if(lg[i+"_"+s+"_done"]) doneN++;
+    var cls="ex"+(doneN===e.sets?" complete":(i===firstOpen?" active":""));
+    h+='<div class="'+cls+'" id="ex'+i+'">'+
+       '<div class="exh" data-open="'+i+'"><span class="n">'+(i+1)+'</span><div><b>'+esc(e.n)+'</b>'+
+       '<div class="meta">'+esc(e.sr)+' &middot; rest '+Math.round(e.rest/60*10)/10+' min</div></div>'+
+       '<span class="chev">Form</span></div>';
+    h+='<div class="detail"><h4>Do it like this</h4><p>'+esc(e.cue)+'</p>'+
+       '<h4>You are doing it right when</h4><p>'+esc(e.feel)+'</p>'+
+       '<h4>If the machine is taken</h4><p class="sub">'+esc(e.sub)+'</p></div>';
+    h+='<div class="sets">';
+    for(var s=0;s<e.sets;s++){
+      var dn=lg[i+"_"+s+"_done"]?" done":"";
+      var kg=lg[i+"_"+s+"_kg"]||"", rp=lg[i+"_"+s+"_rp"]||"";
+      h+='<div class="srow'+dn+'" data-set="'+i+"_"+s+'">'+
+         '<span class="slab num">'+(s+1)+'</span>'+
+         '<span class="fld"><input class="num" inputmode="decimal" placeholder="kg" value="'+esc(kg)+'" data-f="'+i+"_"+s+'_kg"><u>kg</u></span>'+
+         '<span class="fld"><input class="num" inputmode="numeric" placeholder="reps" value="'+esc(rp)+'" data-f="'+i+"_"+s+'_rp"><u>reps</u></span>'+
+         '<button class="ok" data-tick="'+i+"_"+s+'" data-rest="'+e.rest+'">&#10003;</button></div>';
+    }
+    var p=pv[i]; if(p) h+='<p class="hint">Last time: <b>'+esc(p)+'</b></p>';
+    h+='</div></div>';
+  });
+
+  h+='<button class="finish" id="fin">Finish session</button>'+
+     '<button class="ghost" id="clr">Clear today\u2019s entries</button>';
+  view.innerHTML=h;
+
+  var t=taper.children;
+  D.ex.forEach(function(e,i){
+    var dn=0; for(var s=0;s<e.sets;s++) if(lg[i+"_"+s+"_done"]) dn++;
+    t[i].className = dn===e.sets ? "on" : (i===firstOpen ? "now" : "");
+  });
+
+  [].forEach.call(view.querySelectorAll("[data-w]"),function(el){
+    el.onclick=function(){var k=el.getAttribute("data-w");var o=logFor(d);
+      var kk=(k==="r")?"wr":("w"+k); o[kk]=!o[kk]; saveLog(d,o); session(d)}});
+
+  [].forEach.call(view.querySelectorAll("[data-open]"),function(el){
+    el.onclick=function(){el.parentNode.classList.toggle("open")}});
+
+  [].forEach.call(view.querySelectorAll("input[data-f]"),function(el){
+    el.onchange=function(){var o=logFor(d);o[el.getAttribute("data-f")]=el.value;saveLog(d,o)};
+    el.onblur=el.onchange});
+
+  [].forEach.call(view.querySelectorAll("[data-tick]"),function(el){
+    el.onclick=function(){
+      var id=el.getAttribute("data-tick"), o=logFor(d);
+      [].forEach.call(view.querySelectorAll("input[data-f]"),function(inp){
+        o[inp.getAttribute("data-f")]=inp.value});
+      var was=o[id+"_done"]; o[id+"_done"]=!was; saveLog(d,o);
+      if(!was) startTimer(parseInt(el.getAttribute("data-rest"),10));
+      session(d);
+    }});
+
+  document.getElementById("fin").onclick=function(){
+    var lg2=logFor(d), summary={};
+    D.ex.forEach(function(e,i){
+      var best=null;
+      for(var s=0;s<e.sets;s++){
+        var kg=lg2[i+"_"+s+"_kg"], rp=lg2[i+"_"+s+"_rp"];
+        if(kg&&rp) best=kg+"kg x "+rp;
+      }
+      if(best) summary[i]=best;
+    });
+    store.set("prev_"+d,summary); saveLog(d,{}); stopTimer();
+    page="home"; window.scrollTo(0,0); render();
+  };
+  document.getElementById("clr").onclick=function(){
+    if(confirm("Clear today's entries for this session?")){saveLog(d,{});session(d)}};
+}
+
+function reference(){
+  back.hidden=false; taper.hidden=true; title.textContent="Reference";
+  view.innerHTML=
+  '<div class="card"><h3>RIR, the number everything runs on</h3>'+
+  '<p>RIR means reps in reserve: how many more reps you truly could have done when you stopped. Stop at 10 when 12 was possible and that was <b>2 RIR</b>. One more possible is <b>1 RIR</b>. None is <b>0 RIR</b>, which is failure.</p>'+
+  '<p>It sets your weight for you. Pick a load that lands you inside the rep range at the target RIR for the week, so a hard day simply means a lighter weight and the log stays honest.</p>'+
+  '<p>Reps slowing down and grinding means you are roughly 2-3 from failure. Most people overestimate, so once a fortnight take a last set of a safe isolation to true failure to recalibrate.</p></div>'+
+
+  '<div class="card"><h3>When things do not go to plan</h3>'+'<p><b>Missed the minimum reps.</b> Drop the weight 5-10 percent, but only if the first set missed. One rep short on the last set is normal fatigue.</p>'+'<p><b>Pull-ups.</b> With 3-5 clean reps, do them and finish the set on the assisted machine or a band. With fewer than 3, use pulldowns for the working sets and add 2 sets of 3 slow negatives.</p>'+'<p><b>Warm-up rests.</b> None in the general part, 30-60 seconds between ramp sets, then 90 seconds to 2 minutes before the first working set.</p>'+'<p><b>Chest not working.</b> For 4 weeks use the chest press machine instead of incline DBs: handles level with mid-chest, blades back and down, 3 seconds down, stop short of lockout. One light set of cable flys first.</p>'+'<p><b>Band pull-aparts.</b> Band just taut at the start, pull until it touches the chest, 15 reps that burn between the shoulder blades. Widen the grip if you cannot reach.</p></div>'+
+
+  '<div class="card"><h3>Rest</h3>'+
+  '<p><b>Between sets.</b> Compounds, meaning presses, pull-ups, rows, squats and RDLs: 2-3 minutes. Isolations, meaning raises, curls, extensions and face pulls: 1.5-2 minutes. The timer at the bottom starts automatically when you tick a set.</p>'+
+  '<p><b>Between sessions.</b> Wednesday and the weekend are off. Each muscle gets about 72 hours between its two weekly sessions, which is what it needs.</p></div>'+
+
+  '<div class="card"><h3>Short on time</h3>'+
+  '<p><b>60 minutes.</b> Same five exercises. Cap rests at 2 min for compounds and 1.5 for isolations, and superset exercises 4 and 5, since an arm isolation and a leg compound share nothing.</p>'+
+  '<p><b>30 minutes.</b> Drop exercise 3, do the rest as two supersets of three sets, every set at 0-1 RIR. Monday drops incline press, Tuesday drops the row, Thursday drops dips, Friday drops the cable row. The lateral raises and vertical pulls never get dropped.</p>'+
+  '<p><b>20 minutes.</b> Two supersets, two sets each, all to failure. Still worth doing.</p></div>'+
+
+  '<div class="card"><h3>No gym today</h3>'+
+  '<p><b>Push at home.</b> Pike push-ups, deficit push-ups with hands on books, bodyweight skullcrushers off a table edge, lateral raises with filled bottles, sissy squats holding a doorframe.</p>'+
+  '<p><b>Pull at home.</b> Pull-ups or towel rows over a door, single-arm backpack rows, prone Y-raises, backpack curls with the arm behind your body, Nordic curl negatives with feet under the sofa.</p>'+
+  '<p>No rep targets at home. Every set goes to 0-1 RIR with a three second lowering, because light loads still grow muscle when taken close to failure.</p></div>'+
+
+  '<div class="card"><h3>The three that matter most</h3>'+
+  '<p><b>1. Lateral raises.</b> The lateral delt is the cap that sets your widest point, and pressing alone does not build it.</p>'+
+  '<p><b>2. Vertical pulls.</b> Pull-ups and pulldowns build the lats, which are the flare and the lower half of the V.</p>'+
+  '<p><b>3. Overhead triceps extensions.</b> Triceps are about two thirds of your arm, and the overhead stretch grew them around 40 percent more than pushdowns in MRI-measured research.</p></div>'+
+
+  '<div class="card"><h3>Quiet weak links</h3>'+
+  '<p><b>Rear delts</b> keep the shoulder looking round from the side, trained by face pulls and every row. <b>Lower and mid traps</b> stop the shoulders rolling forward, which is what makes a wide frame read as wide.</p>'+
+  '<p><b>Brachialis</b> sits under the biceps and pushes it up, trained by hammer curls. <b>Forearms</b> come along with hammer curls and pulling.</p>'+
+  '<p><b>Your waist</b> is half of the ratio. Skip heavy weighted side bends and loaded twists, since thicker obliques work against the taper. Bracing during compounds is enough.</p></div>';
+}
+
+/* ---------- rest timer ---------- */
+var timer=document.getElementById("timer"), tnum=document.getElementById("tnum"),
+    tinfo=document.getElementById("tinfo"), tbar=document.getElementById("tbar");
+
+function fmt(s){var m=Math.floor(Math.abs(s)/60),x=Math.abs(s)%60;
+  return (s<0?"+":"")+m+":"+(x<10?"0":"")+x}
+
+function startTimer(sec){
+  stopTimer(); tTotal=sec; tLeft=sec;
+  timer.classList.add("up"); timer.classList.remove("over");
+  tinfo.textContent="Rest before the next set";
+  paint();
+  timerId=setInterval(function(){
+    tLeft--; paint();
+    if(tLeft===0){
+      timer.classList.add("over"); tinfo.textContent="Rest complete, go again";
+      if(navigator.vibrate) navigator.vibrate([180,90,180]);
+    }
+    if(tLeft<-120) stopTimer();
+  },1000);
+}
+function paint(){
+  tnum.textContent=fmt(tLeft);
+  var p=tLeft>0?(tLeft/tTotal*100):0; tbar.style.width=Math.max(0,p)+"%";
+}
+function stopTimer(){if(timerId)clearInterval(timerId);timerId=null;timer.classList.remove("up","over")}
+document.getElementById("tskip").onclick=stopTimer;
+document.getElementById("tadd").onclick=function(){tLeft+=30;tTotal+=30;
+  timer.classList.remove("over");tinfo.textContent="Rest before the next set";paint()};
+
+back.onclick=function(){stopTimer();page="home";window.scrollTo(0,0);render()};
+render();
+</script>
+
+<script>
+if("serviceWorker" in navigator){
+  window.addEventListener("load",function(){
+    navigator.serviceWorker.register("sw.js").catch(function(){});
+  });
+}
+</script>
+</body>
+</html>
