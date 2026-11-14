@@ -206,6 +206,14 @@ options are as easy as Full.
   habits fed by Focus Desk can't be marked Full by hand.
 - **Streak maths** is `computeStreaks()`, pure, between the `streaks:begin`
   / `streaks:end` markers so it can be run in node.
+- **Two overall streaks**: *Learning* (consecutive days with a Full or
+  Minimum on a habit marked Learning) and *Showed up* (the same for any
+  habit), so a non-study habit like job search keeps you showing up without
+  pretending it was learning. The flag is the habit's `learning` field,
+  ticked in Settings; habits saved before it existed fall back to
+  `LEARNING_IDS` (the four study ids). New habits start unticked.
+- **Chart picker** above the 26-week grid: Learning, Showed up, or any one
+  habit. The choice is remembered per device in `habits:chart`.
 - **Edit habits** in its Settings panel (rename, reorder, archive, targets);
   archiving keeps the history.
 - **Weekly review** (header button, or `/habits/#review`): last week's

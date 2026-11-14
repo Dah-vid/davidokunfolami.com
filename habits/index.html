@@ -94,6 +94,7 @@ a.btn{display:inline-block;text-decoration:none;color:inherit}
 .streak-row .n{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
 .streak-row .n b{color:var(--ink);font-size:15px}
 .streak-row .sub{grid-column:1/-1;font-size:12px;color:var(--muted)}
+.stat small{font-size:12px;font-weight:400;color:var(--muted)}
 
 /* Heatmap: same build as Focus Desk */
 .heat-scroll{overflow-x:auto;padding-bottom:4px}
@@ -240,14 +241,17 @@ textarea.field{min-height:68px;resize:vertical;line-height:1.45}
       <section class="sec" aria-labelledby="streakH">
         <div class="sec-h"><h2 id="streakH">Streaks</h2><span class="legend">A side effect, not the goal</span></div>
         <div class="stats" id="overall"></div>
+        <p class="why">Learning: days with a Full or Minimum on a habit marked Learning. Showed up: the same for any habit. Choose which habits are Learning in Settings.</p>
         <ul class="streaks" id="streaks"></ul>
       </section>
 
       <section class="sec" aria-labelledby="heatH">
-        <div class="sec-h"><h2 id="heatH">Last 26 weeks</h2><span class="legend">Shade = Full entries that day</span></div>
+        <div class="sec-h"><h2 id="heatH">Last 26 weeks</h2><span class="legend" id="heatLegend">Shade = Full entries that day</span></div>
+        <div class="tags" id="chartPick" role="group" aria-label="Which streak to chart"></div>
+        <p class="why" id="chartSum" role="status"></p>
         <div class="heat-scroll"><div class="heat" id="heat" role="img"></div></div>
         <div class="heat-legend" aria-hidden="true">Less <i class="cell"></i><i class="cell l1"></i><i class="cell l2"></i><i class="cell l3"></i><i class="cell l4"></i> More<span class="gap"></span><i class="cell rep"></i> Reserve only</div>
-        <p class="why">Lightest shade = Minimum only. Each Full adds a shade, up to three.</p>
+        <p class="why" id="heatWhy">Lightest shade = Minimum only. Each Full adds a shade, up to three.</p>
       </section>
     </div>
   </div>
@@ -306,6 +310,18 @@ const RANK = {full:3, min:2, reserve:1};
 // an entry recorded by Focus Desk beats a manual one.
 const better = (a, b) => (RANK[a.kind] || 0) !== (RANK[b.kind] || 0) ? (RANK[a.kind] || 0) > (RANK[b.kind] || 0) : a.source === 'focusdesk' && b.source !== 'focusdesk';
 
+// Habits that keep the Learning streak going. Habits saved before the flag existed: the four study ones.
+const LEARNING_IDS = ['neetcode', 'building', 'sysdesign', 'textbook'];
+const isLearning = h => !!h && (typeof h.learning === 'boolean' ? h.learning : LEARNING_IDS.includes(h.id));
+// Runs of consecutive days in keys (sorted, unique). Today with nothing yet doesn't break the current run.
+function dayRuns(keys, today){
+  const have = new Set(keys); let longest = 0, run = 0, prev = null, days = 0;
+  for (const k of keys){ if (k > today) continue; days++; run = prev && addDays(prev, 1) === k ? run + 1 : 1; longest = Math.max(longest, run); prev = k; }
+  let current = 0;
+  for (let d = have.has(today) ? today : addDays(today, -1); have.has(d); d = addDays(d, -1)) current++;
+  return {current, longest, days};
+}
+
 function computeStreaks(habits, entries, todayDate){
   const byHabit = new Map();
   for (const e of entries || []){
@@ -340,16 +356,17 @@ function computeStreaks(habits, entries, todayDate){
     }
     perHabit[h.id] = {current, longest, unit:h.cadence === 'weekly' ? 'week' : 'day', minDays, doneDays, thisWeekCounted};
   }
-  // overall: a day is active when any habit has a Full or Minimum (Reserves alone don't count)
+  // overall: a day is active when a habit has a Full or Minimum (Reserves alone don't count).
+  // Showed up = any habit; Learning = only habits marked Learning (archived ones still count for their past).
   const overall = new Map();
   byHabit.forEach(m => m.forEach((e, day) => {
     const o = overall.get(day) || {full:0, min:0, reserve:0, list:[]};
     o[e.kind]++; o.list.push(e); overall.set(day, o);
   }));
-  const activeKeys = [...overall].filter(([, o]) => o.full + o.min > 0).map(([k]) => k).sort();
-  let longestRun = 0, run = 0, prev = null;
-  for (const k of activeKeys){ run = prev && addDays(prev, 1) === k ? run + 1 : 1; longestRun = Math.max(longestRun, run); prev = k; }
-  return {habits:perHabit, activeDays:activeKeys.length, longestRun, days:overall};
+  const learningIds = new Set(habits.filter(isLearning).map(h => h.id));
+  const activeKeys = pred => [...overall].filter(([, o]) => o.list.some(e => e.kind !== 'reserve' && pred(e.habitId))).map(([k]) => k).sort();
+  const any = dayRuns(activeKeys(() => true), ymd(todayDate)), learning = dayRuns(activeKeys(id => learningIds.has(id)), ymd(todayDate));
+  return {habits:perHabit, activeDays:any.days, longestRun:any.longest, any, learning, learningCount:learningIds.size, days:overall};
 }
 
 /* Weekly review. Reviews are keyed by ISO week ("2026-W45"). On a Sunday the week under review
@@ -571,14 +588,18 @@ $('lateReason').addEventListener('input', renderPast);
 function renderStreaks(){
   const today = new Date(), s = computeStreaks(habits, entries, today);
   const ov = $('overall'); ov.textContent = '';
-  [[s.activeDays, 'Active days'], [s.longestRun, 'Longest overall run (days)']].forEach(([v, l]) => { const st = el('div', 'stat'); st.append(el('b', null, String(v)), el('span', null, l)); ov.append(st); });
+  [[s.learning, 'Learning streak'], [s.any, 'Showed up streak']].forEach(([r, l]) => {
+    const st = el('div', 'stat'), b = el('b', null, String(r.current));
+    b.append(' ', el('small', null, r.current === 1 ? 'day' : 'days'));
+    st.append(b, el('span', null, l), el('span', null, 'Longest ' + r.longest)); ov.append(st);
+  });
   const ul = $('streaks'); ul.textContent = '';
   habits.filter(h => h.active !== false).forEach(h => {
     const r = s.habits[h.id], li = el('li', 'streak-row');
     const cur = el('span', 'n'); cur.append('Current ', el('b', null, String(r.current)), ' ' + r.unit + (r.current === 1 ? '' : 's'));
     const lon = el('span', 'n'); lon.append('Longest ', el('b', null, String(r.longest)));
     li.append(el('span', 'habit-name', h.name), cur, lon);
-    let sub = 'Minimum days: ' + r.minDays + ' of ' + r.doneDays;
+    let sub = (isLearning(h) ? 'Learning · ' : '') + 'Minimum days: ' + r.minDays + ' of ' + r.doneDays;
     if (r.current === 0 && r.longest > 0) sub += ' · Streak reset. Longest: ' + plural(r.longest, r.unit) + '. Next entry starts a new one.';
     li.append(el('span', 'sub', sub)); ul.append(li);
   });
@@ -592,21 +613,53 @@ function renderStreaks(){
   if (starts.length > 1 && starts[1] < 3) starts.shift();
   starts.forEach(w => { const n = el('span', 'm', dateAt(w * 7).toLocaleDateString([], {month:'short'})); n.style.gridColumn = w + 2; n.style.gridRow = 1; heat.append(n); });
   const nameOf = id => (habits.find(h => h.id === id) || {name:id}).name;
+
+  // which chart: the Learning streak, Showed up (any habit), or one habit
+  const pick = chartPick();
+  const one = habits.find(h => h.id === pick);
+  const keep = pick === 'any' ? () => true : pick === 'learning' ? id => isLearning(habits.find(h => h.id === id)) : id => id === pick;
+  const pickBox = $('chartPick'); pickBox.textContent = '';
+  [['learning', 'Learning'], ['any', 'Showed up']].concat(habits.filter(h => h.active !== false).map(h => [h.id, h.name])).forEach(([id, label]) => {
+    const b = el('button', 'tag', label); b.type = 'button'; b.setAttribute('aria-pressed', String(id === pick));
+    b.onclick = () => { set('chart', id); renderStreaks(); };
+    pickBox.append(b);
+  });
+  if (one){
+    const r = s.habits[one.id];
+    $('chartSum').textContent = one.name + ': current ' + plural(r.current, r.unit) + ', longest ' + plural(r.longest, r.unit) + ', ' + plural(r.doneDays, 'day') + ' done.';
+    $('heatLegend').textContent = 'Shade = Minimum or Full';
+    $('heatWhy').textContent = 'Light = Minimum, dark = Full, dashed = Reserve.';
+  } else {
+    const r = pick === 'any' ? s.any : s.learning;
+    $('chartSum').textContent = pick === 'learning' && !s.learningCount ? 'No habit is marked Learning yet. Tick it on a habit in Settings.'
+      : (pick === 'any' ? 'Showed up' : 'Learning') + ': current ' + plural(r.current, 'day') + ', longest ' + plural(r.longest, 'day') + ', ' + plural(r.days, 'active day') + '.';
+    $('heatLegend').textContent = 'Shade = Full entries that day';
+    $('heatWhy').textContent = 'Lightest shade = Minimum only. Each Full adds a shade, up to three.';
+  }
+
   let active = 0;
   for (let idx = 0; idx <= todayIdx; idx++){
-    const d = dateAt(idx), o = s.days.get(ymd(d)), c = el('i', 'cell');
+    const d = dateAt(idx), all = s.days.get(ymd(d)), list = all ? all.list.filter(e => keep(e.habitId)) : [], c = el('i', 'cell');
     const label = d.toLocaleDateString([], {weekday:'short', day:'numeric', month:'short'});
-    if (o){
-      if (o.full) c.classList.add('l' + Math.min(4, o.full + 1));
-      else if (o.min) c.classList.add('l1');
+    if (list.length){
+      const full = list.filter(e => e.kind === 'full').length, min = list.filter(e => e.kind === 'min').length;
+      if (one) c.classList.add(full ? 'l4' : min ? 'l2' : 'rep');
+      else if (full) c.classList.add('l' + Math.min(4, full + 1));
+      else if (min) c.classList.add('l1');
       else c.classList.add('rep');
-      if (o.full + o.min) active++;
-      c.title = label + ': ' + o.list.map(e => nameOf(e.habitId) + ' ' + KIND_LABEL[e.kind] + (e.kind === 'reserve' && e.reason ? ' (' + e.reason + ')' : '') + (e.source === 'focusdesk' ? ' (Focus Desk)' : '')).join('; ');
+      if (full + min) active++;
+      c.title = label + ': ' + list.map(e => nameOf(e.habitId) + ' ' + KIND_LABEL[e.kind] + (e.kind === 'reserve' && e.reason ? ' (' + e.reason + ')' : '') + (e.source === 'focusdesk' ? ' (Focus Desk)' : '')).join('; ');
     } else c.title = label + ': nothing logged';
     c.style.gridColumn = Math.floor(idx / 7) + 2; c.style.gridRow = (idx % 7) + 2;
     heat.append(c);
   }
-  heat.setAttribute('aria-label', 'Habit activity over the last 26 weeks: ' + plural(active, 'active day') + '.');
+  heat.parentElement.scrollLeft = heat.parentElement.scrollWidth; // phones: start at this week, scroll back for older
+  heat.setAttribute('aria-label', (one ? one.name : pick === 'any' ? 'Showed up' : 'Learning') + ' over the last 26 weeks: ' + plural(active, 'active day') + '.');
+}
+// the chosen chart, remembered on this device; falls back to Learning if that habit is gone or archived
+function chartPick(){
+  const p = get('chart');
+  return p === 'any' || p === 'learning' || habits.some(h => h.id === p && h.active !== false) ? p : 'learning';
 }
 
 /* ---------- weekly review ----------
@@ -712,7 +765,10 @@ function renderSettings(){
     up.disabled = i === 0; dn.disabled = i === habits.length - 1;
     up.onclick = () => { habits.splice(i - 1, 0, habits.splice(i, 1)[0]); saveHabits(); render(); };
     dn.onclick = () => { habits.splice(i + 1, 0, habits.splice(i, 1)[0]); saveHabits(); render(); };
-    tools.append(act, up, dn);
+    const lrn = el('label', 'inline'), lb = el('input'); lb.type = 'checkbox'; lb.checked = isLearning(h);
+    lb.addEventListener('change', () => { h.learning = lb.checked; saveHabits(); render(); });
+    lrn.append(lb, document.createTextNode('Learning (keeps the Learning streak going)'));
+    tools.append(act, lrn, up, dn);
     if (h.window) tools.append(el('span', 'why', 'Logged 9pm–3am only'));
     row.append(tools); box.append(row);
   });
@@ -730,7 +786,7 @@ function renderSettings(){
 }
 $('settingsBtn').onclick = () => { const s = $('settings'); s.hidden = !s.hidden; $('settingsBtn').setAttribute('aria-expanded', String(!s.hidden)); };
 $('addHabit').onclick = () => {
-  habits.push({id:mkId(), name:'New habit', cadence:'daily', target:1, min:'', full:'', reserves:2, active:true, createdDay:ymd(new Date())});
+  habits.push({id:mkId(), name:'New habit', cadence:'daily', target:1, min:'', full:'', reserves:2, active:true, learning:false, createdDay:ymd(new Date())});
   saveHabits(); render();
 };
 
@@ -740,8 +796,8 @@ $('exportBtn').onclick = () => {
   const nameOf = id => (habits.find(h => h.id === id) || {}).name || null, reviews = loadReviews();
   const data = {
     app:'habits', version:1, exportedAt:new Date().toISOString(), timezone:Intl.DateTimeFormat().resolvedOptions().timeZone,
-    notes:'habits = what is tracked: cadence daily or weekly; target = Full+Minimum entries needed per Mon-Sun week, each Reserve lowering it by 1 (floor 1); reserves = emergency skips allowed per week; active false = archived. entries = at most one per habit per day: kind full | min | reserve; reserve has a reason; late = why a past day was filled in afterwards (allowed up to 48h); source focusdesk = written automatically from a timed Focus Desk block, with focusedMin and blockId; day = local date the entry is for; time = when it was logged. mapping = Focus Desk subject -> habit id. reviews = one weekly review per ISO week (Mon-Sun, monday = its first day), answers keyed by question text; done = all three answered.',
-    habits, mapping:settings.mapping,
+    notes:'habits = what is tracked: cadence daily or weekly; target = Full+Minimum entries needed per Mon-Sun week, each Reserve lowering it by 1 (floor 1); reserves = emergency skips allowed per week; active false = archived; learning = counts toward the Learning streak (consecutive days with a Full or Minimum on any Learning habit), while the Showed up streak counts every habit. entries = at most one per habit per day: kind full | min | reserve; reserve has a reason; late = why a past day was filled in afterwards (allowed up to 48h); source focusdesk = written automatically from a timed Focus Desk block, with focusedMin and blockId; day = local date the entry is for; time = when it was logged. mapping = Focus Desk subject -> habit id. reviews = one weekly review per ISO week (Mon-Sun, monday = its first day), answers keyed by question text; done = all three answered.',
+    habits:habits.map(h => Object.assign({}, h, {learning:isLearning(h)})), mapping:settings.mapping,
     entries:entries.map(e => Object.assign({}, e, {time:iso(e.at), habitName:nameOf(e.habitId)})),
     reviews:Object.values(reviews).sort((a, b) => a.week < b.week ? -1 : 1).map(r => ({
       week:r.week, monday:r.monday, sunday:r.monday ? addDays(r.monday, 6) : null, done:reviewDone(r), updated:iso(r.updatedAt),
