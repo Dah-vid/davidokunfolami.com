@@ -15,6 +15,8 @@ blog/           the blog (see "Writing a blog post" below)
 focus/          Focus Desk, a self-contained focus timer app (see MAINTAINING.md)
 habits/         Habits tracker (noindex); fed by Focus Desk (see MAINTAINING.md)
 desk/           start page for Focus Desk + Habits, read-only (noindex)
+write/          blog editor: write and publish posts from the browser (noindex)
+owner.js        owner mode: shows the personal tools in menus on your own devices
 fonts/          self-hosted Archivo Expanded Black (headings)
 David-Okunfolami-CV.pdf   linked from the CV section
 favicon.svg

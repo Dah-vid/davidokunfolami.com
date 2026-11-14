@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <script src="/owner.js"></script>
 <title>Focus Desk — David Okunfolami</title>
 <meta name="description" content="Focus Desk: a focus timer and distraction journal for study sessions. Timed blocks, if-then plans, and a seven-day view of where your focus went. Saves in your own browser.">
 <meta property="og:title" content="Focus Desk — David Okunfolami">
@@ -250,9 +251,9 @@ body[data-phase="idle"] .rule .kw{color:var(--muted)}
   <nav aria-label="Site">
     <a href="/#projects">projects</a>
     <a href="/blog/">blog</a>
-    <a href="/desk/">desk</a>
+    <a class="owner-only" href="/desk/">desk</a>
     <a href="/focus/" aria-current="page">focus</a>
-    <a href="/habits/">habits</a>
+    <a class="owner-only" href="/habits/">habits</a>
     <a href="/#about">about</a>
     <a href="/#contact">contact</a>
   </nav>
@@ -265,8 +266,8 @@ body[data-phase="idle"] .rule .kw{color:var(--muted)}
     <span class="spacer"></span>
     <span class="keys"><kbd>Space</kbd> start / pause &nbsp; <kbd>D</kbd> log a distraction</span>
     <button class="btn small" id="pipBtn" type="button" hidden>Pop out mini timer</button>
-    <a class="btn small" href="/desk/">Desk</a>
-    <a class="btn small" href="/habits/">Habits</a>
+    <a class="btn small owner-only" href="/desk/">Desk</a>
+    <a class="btn small owner-only" href="/habits/">Habits</a>
     <button class="btn small" id="streakBtn" type="button" aria-expanded="false" aria-controls="streak">Focus days</button>
     <button class="btn small" id="settingsBtn" aria-expanded="false" aria-controls="settings">Settings</button>
   </header>

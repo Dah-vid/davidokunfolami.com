@@ -20,6 +20,23 @@ browser may show the old version for up to 10 minutes (see Gotchas).
 
 ## Write a blog post
 
+**From the website (easiest):** open `davidokunfolami.com/write/` (on your
+own devices, the blog page also shows "Write a post →"). Write, check the
+preview, press Publish. It commits the post and its `posts.json` entry to
+`main` in one go, and it's live about a minute later. Edit or delete
+existing posts from the list on the same page. A post's address (slug) is
+fixed once published, because its comments are tied to it.
+
+- **One-time setup per device:** the page needs a GitHub fine-grained token
+  (the steps are on the page): only this repo, **Contents: Read and
+  write**, nothing else. It's stored in that browser's localStorage, never
+  in the repo. When it expires, make a new one and paste it in; drafts are
+  kept on the device meanwhile.
+- **Anything you publish from the site** lands on GitHub, so run `git pull`
+  before editing posts in VS Code.
+
+**From VS Code:**
+
 1. Create `blog/posts/<slug>.md` — e.g. `blog/posts/why-i-built-joblens.md`.
 2. Add an entry to `blog/posts.json` (slug must match the filename):
 
@@ -102,11 +119,28 @@ edit all of them or the site goes inconsistent:
 Quick check that all five match:
 `grep -c 'x.com/thatboycodes' index.html blog/index.html blog/post.html focus/index.html`
 
-The header nav is duplicated the same way (all six files, `habits/index.html`
-and `desk/index.html` included) — add a new page's link to each. On phones
-(under 540px) the `max-width: 540px` rule in `styles.css` lays the nav out
-as a grid of four columns, so it breaks into even rows instead of leaving
-one link alone on a line.
+The header nav is duplicated the same way (seven files: also
+`habits/index.html`, `desk/index.html` and `write/index.html`) — add a new
+page's link to each.
+
+## Owner mode: what visitors see vs what you see
+
+`desk` and `habits` are in every page's menu, but marked `class="owner-only"`,
+so they only show on **your** devices (as do Focus Desk's Desk/Habits
+buttons, Habits' Desk button and the blog's "Write a post →"). Visitors get
+projects · blog · focus · about · (cv) · contact.
+
+- **Turn it on** for a device: open any page with `?me` on the end
+  (e.g. `davidokunfolami.com/?me`). **Off:** `?notme`. It's remembered per
+  browser; clearing site data turns it off. `owner.js` does this, loaded in
+  `<head>` on every page.
+- It's tidiness, not security: the pages still open by URL for anyone.
+  Nothing personal is on the server anyway, since Habits and Focus Desk keep
+  all data in the visitor's own browser.
+- **Phones:** visitors' six links sit in one row from 360px up (three-column
+  grid below that); your eight split into two rows of four under 540px.
+  These are the `owner` rules near the top of the header section in
+  `styles.css`.
 
 ## Focus Desk (`focus/`)
 
@@ -142,9 +176,17 @@ and colour tokens from `/styles.css`.
 
 ## Habits (`habits/`)
 
-In the site nav and linked from Focus Desk's top bar; `noindex` keeps it
-out of search results. One self-contained file like Focus Desk, same tokens. Rule of the page: streaks are a side effect of honest
-logging, so honest options are as easy as Full.
+In the menu on your devices only (see Owner mode); `noindex` keeps it out
+of search results. One self-contained file like Focus Desk, same tokens.
+Rule of the page: streaks are a side effect of honest logging, so honest
+options are as easy as Full.
+
+- **Example habits** (`SEED`) are what a first-time visitor sees: generic
+  on purpose. They're only used when a browser has no habits saved, so your
+  own list never changes. On a new device, bring yours over with
+  Settings → Export on the old one and Import backup on the new one.
+  Keep the ids `neetcode`, `building`, `sysdesign`, `textbook`: Focus Desk's
+  subjects log to those.
 
 - **Storage** is shared with Focus Desk under `habits:` keys:
   `habits:habits` (definitions), `habits:entries` (one entry per habit per
@@ -176,8 +218,8 @@ Focus Desk is listed first 05:00–09:00 (with the resume note), Habits
 first otherwise; a "Weekly review due" link appears Sunday/Monday until
 the review is done. It only ever *reads* localStorage. Its date and
 entry rules are copied from the pure block in `habits/index.html`, so if
-you change those rules there, change them here too. `noindex`, but in
-the site nav, and Focus Desk and Habits link to it from their top bar too.
+you change those rules there, change them here too. `noindex`, and in
+the menu on your devices only (see Owner mode).
 
 ## Change colors or fonts
 

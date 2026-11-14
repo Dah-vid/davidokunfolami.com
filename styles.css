@@ -153,10 +153,38 @@ a {
   color: var(--paper);
 }
 
-/* phones: two even rows of four instead of a ragged wrap with one link
-   left on its own line */
+/* personal tools: in the menu only on the owner's devices (see owner.js);
+   the page you're on always keeps its own link */
+.owner-only {
+  display: none !important;
+}
+
+.owner .owner-only,
+.owner-only[aria-current] {
+  display: revert !important;
+}
+
+/* visitors' six links fit one row on a 360px phone */
+@media (max-width: 420px) {
+  html:not(.owner) .site-header nav {
+    font-size: 0.9rem;
+    column-gap: 0.9rem;
+  }
+}
+
+/* ...and on the smallest phones, even rows of three */
+@media (max-width: 359px) {
+  html:not(.owner) .site-header nav {
+    display: grid;
+    grid-template-columns: repeat(3, max-content);
+    gap: 0.35rem 1.25rem;
+  }
+}
+
+/* owner's phones: two even rows of four instead of a ragged wrap with one
+   link left on its own line */
 @media (max-width: 540px) {
-  .site-header nav {
+  .owner .site-header nav {
     display: grid;
     grid-template-columns: repeat(4, max-content);
     gap: 0.35rem 1.5rem;

@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <script src="/owner.js"></script>
 <meta name="robots" content="noindex,nofollow">
 <title>Habits — David Okunfolami</title>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
@@ -142,9 +143,9 @@ textarea.field{min-height:68px;resize:vertical;line-height:1.45}
   <nav aria-label="Site">
     <a href="/#projects">projects</a>
     <a href="/blog/">blog</a>
-    <a href="/desk/">desk</a>
+    <a class="owner-only" href="/desk/">desk</a>
     <a href="/focus/">focus</a>
-    <a href="/habits/" aria-current="page">habits</a>
+    <a class="owner-only" href="/habits/" aria-current="page">habits</a>
     <a href="/#about">about</a>
     <a href="/#contact">contact</a>
   </nav>
@@ -155,7 +156,7 @@ textarea.field{min-height:68px;resize:vertical;line-height:1.45}
     <h1 class="brand">Habits</h1>
     <span class="chip-status">Saved in this browser</span>
     <span class="spacer"></span>
-    <a class="btn small" href="/desk/">Desk</a>
+    <a class="btn small owner-only" href="/desk/">Desk</a>
     <a class="btn small" href="/focus/">Focus Desk</a>
     <button class="btn small" id="reviewBtn" type="button" aria-expanded="false" aria-controls="review">Weekly review</button>
     <button class="btn small" id="settingsBtn" type="button" aria-expanded="false" aria-controls="settings">Settings</button>
@@ -272,14 +273,17 @@ const KIND_LABEL = {full:'Full', min:'Minimum', reserve:'Reserve'};
 const RESERVE_REASONS = ['Tired', 'No time', 'Ill', 'Other'];
 const SUBJECTS = [{id:'neetcode', label:'NeetCode'}, {id:'build', label:'Build'}, {id:'sysdesign', label:'System design'}, {id:'textbook', label:'Textbook'}];
 const DEFAULT_MAPPING = {neetcode:'neetcode', build:'building', sysdesign:'sysdesign', textbook:'textbook'};
+/* Example habits for a first visit. They're only used when this browser has no habits saved, so
+   an existing setup never changes; to bring yours to a new device, use Settings → Import backup.
+   The ids of the four study habits match DEFAULT_MAPPING (and Focus Desk's), so subjects still log. */
 const SEED = [
-  {id:'jobsearch', name:'Job search', cadence:'daily', target:1, min:'Search and shortlist 1 sponsorable role', full:'Submit 1 application'},
-  {id:'neetcode', name:'NeetCode', cadence:'weekly', target:4, min:'Re-solve 1 past problem, 15 min, no AI', full:'Solve a new problem'},
+  {id:'neetcode', name:'Coding practice', cadence:'weekly', target:4, min:'Re-solve one past problem, 15 min', full:'Solve a new problem'},
   {id:'building', name:'Building', cadence:'weekly', target:3, min:'One real change, however small', full:'Full session'},
-  {id:'sysdesign', name:'System design', cadence:'weekly', target:1, min:'One section, then explain from memory', full:'Full session'},
-  {id:'textbook', name:'Textbook', cadence:'weekly', target:2, min:'One section, then explain from memory', full:'Full session'},
+  {id:'sysdesign', name:'System design', cadence:'weekly', target:1, min:'One section, then explain it from memory', full:'Full session'},
+  {id:'textbook', name:'Reading', cadence:'weekly', target:2, min:'One section, then explain it from memory', full:'Full session'},
+  {id:'exercise', name:'Exercise', cadence:'weekly', target:3, min:'A 20-minute walk', full:'Full workout'},
   // window: minutes after midnight it can be logged, [21:00, 03:00). Logged on the night, never next morning.
-  {id:'bedtime', name:'Bedtime', cadence:'daily', target:1, min:'Lights off by 10:30pm', full:'Lights off by 10pm', window:[1260, 180]}
+  {id:'bedtime', name:'Bedtime', cadence:'daily', target:1, min:'Lights off by 11pm', full:'Lights off by 10:30pm', window:[1260, 180]}
 ];
 
 /* streaks:begin — pure functions, also run in node by the tests */
@@ -660,7 +664,7 @@ function renderReview(){
     [f.topTag ? TAG_LABEL[f.topTag.id] || f.topTag.id : '–', f.topTag ? 'top urge reason (' + f.topTag.n + ')' : 'top urge reason (none tagged)'],
     [f.topSubject ? SUBJECT_LABEL[f.topSubject.id] || f.topSubject.id : '–', f.topSubject ? 'subject with most urges (' + f.topSubject.n + ')' : 'subject with most urges'],
     [w.bedtime && w.bedtime.nights ? Math.round(w.bedtime.hit / w.bedtime.nights * 100) + '%' : '–',
-      w.bedtime ? 'bedtime hit, ' + w.bedtime.hit + ' of ' + plural(w.bedtime.nights, 'night') + (w.bedtime.full ? ' (' + w.bedtime.full + ' by 10pm)' : '') : 'bedtime (no Bedtime habit)']
+      w.bedtime ? 'bedtime hit, ' + w.bedtime.hit + ' of ' + plural(w.bedtime.nights, 'night') + (w.bedtime.full ? ' (' + w.bedtime.full + ' Full)' : '') : 'bedtime (no Bedtime habit)']
   ];
   items.forEach(([v, l]) => { const s = el('div', 'stat'); s.append(el('b', null, v), el('span', null, l)); stats.append(s); });
 }

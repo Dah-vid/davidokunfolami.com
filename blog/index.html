@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="/owner.js"></script>
   <title>Blog — David Okunfolami</title>
   <meta name="description" content="Occasional writing from David Okunfolami — thoughts on building software, tools, and whatever else is on my mind.">
   <meta property="og:title" content="Blog — David Okunfolami">
@@ -22,9 +23,9 @@
     <nav aria-label="Site">
       <a href="../#projects">projects</a>
       <a href="./" aria-current="page">blog</a>
-      <a href="../desk/">desk</a>
+      <a class="owner-only" href="../desk/">desk</a>
       <a href="../focus/">focus</a>
-      <a href="../habits/">habits</a>
+      <a class="owner-only" href="../habits/">habits</a>
       <a href="../#about">about</a>
       <a href="../#contact">contact</a>
     </nav>
@@ -34,6 +35,7 @@
     <section class="blog-hero">
       <h1 class="page-title"><span class="solid">Blog</span></h1>
       <p class="hero-bio">Occasional thoughts — on software, on what I'm building, and on whatever else is on my mind.</p>
+      <p class="hero-bio owner-only"><a href="../write/">Write a post →</a></p>
     </section>
 
     <section id="posts" class="posts-section" aria-labelledby="posts-label">

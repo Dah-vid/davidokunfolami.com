@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="/owner.js"></script>
+  <meta name="robots" content="noindex,nofollow">
+  <title>Write — David Okunfolami</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="preload" href="/fonts/archivo-expanded-black.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/styles.css">
+  <style>
+  /* The blog editor. Writes a post straight into the repo through the GitHub API, using a
+     token that stays in this browser. Same parts as the rest of the site: hairline rows,
+     square controls, Archivo headings; the preview is the real post styling. */
+  [hidden]{display:none!important}
+  .w-main{display:flex;flex-direction:column;gap:2rem;padding-bottom:4rem}
+  .w-hero{padding-top:clamp(1.5rem,6vh,3.5rem)}
+  .w-hero .page-title{margin:0}
+  .w-sub{color:var(--smoke);max-width:var(--measure);margin-top:.75rem}
+  .w-sec{border-top:1px solid var(--graphite);padding-top:1rem;display:flex;flex-direction:column;gap:1rem;min-width:0}
+  .w-sec-h{display:flex;align-items:baseline;justify-content:space-between;gap:.5rem 1rem;flex-wrap:wrap}
+  .w-label{font-size:.75rem;letter-spacing:.12em;text-transform:uppercase;color:var(--smoke)}
+  .w-steps{margin:0;padding-left:1.25rem;color:var(--smoke);max-width:var(--measure);display:flex;flex-direction:column;gap:.35rem}
+  .w-steps b{color:var(--paper);font-weight:600}
+  .w-row{display:flex;flex-wrap:wrap;gap:.6rem;align-items:center}
+  .w-field{display:flex;flex-direction:column;gap:.35rem;min-width:0}
+  .w-field span{font-size:.8rem;color:var(--smoke)}
+  .w-input,.w-text{width:100%;background:#17191c;color:var(--paper);border:1px solid var(--graphite);border-radius:0;
+    padding:.65rem .75rem;font:inherit;font-size:1rem}
+  .w-input:focus,.w-text:focus{outline:none;border-color:var(--paper)}
+  .w-input[readonly]{color:var(--smoke)}
+  .w-text{min-height:55vh;resize:vertical;line-height:1.6;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.95rem}
+  .w-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:.9rem}
+  @media (min-width:640px){.w-grid{grid-template-columns:minmax(0,2fr) minmax(0,1fr)}.w-grid .wide{grid-column:1/-1}}
+  .w-btn{background:none;color:var(--paper);border:1px solid var(--smoke);border-radius:0;padding:.6rem 1rem;font:inherit;font-weight:700;cursor:pointer}
+  .w-btn:hover{border-color:var(--paper)}
+  .w-btn.primary{background:var(--paper);color:var(--carbon);border-color:var(--paper);
+    font-family:var(--font-display);font-weight:900;font-stretch:125%;text-transform:uppercase;letter-spacing:.02em}
+  .w-btn.primary:disabled{opacity:.5;cursor:wait}
+  .w-btn.danger{color:var(--smoke);border-color:var(--graphite)}
+  .w-btn.small{padding:.35rem .7rem;font-size:.85rem}
+  .w-status{color:var(--smoke);font-size:.9rem;min-height:1.4em}
+  .w-status a{color:var(--paper)}
+  .w-status.err{color:var(--paper);border-left:3px solid var(--paper);padding-left:.75rem}
+  /* existing posts: hairline rows */
+  .w-posts{list-style:none;margin:0;padding:0;border-bottom:1px solid var(--graphite)}
+  .w-posts li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:.15rem 1rem;align-items:baseline;border-top:1px solid var(--graphite);padding:.8rem 0}
+  .w-posts .t{font-weight:700;overflow-wrap:anywhere}
+  .w-posts .d{grid-column:1;color:var(--smoke);font-size:.85rem}
+  .w-posts .w-btn{grid-row:1/3;grid-column:2;align-self:center}
+  /* editor + preview: side by side when there's room, tabs on a phone */
+  .w-tabs{display:flex;gap:0}
+  .w-tabs button{background:none;border:1px solid var(--graphite);color:var(--smoke);padding:.45rem .9rem;font:inherit;font-size:.9rem;cursor:pointer;border-radius:0}
+  .w-tabs button+button{border-left:0}
+  .w-tabs button[aria-selected="true"]{background:var(--paper);border-color:var(--paper);color:var(--carbon)}
+  .w-split{display:grid;grid-template-columns:minmax(0,1fr);gap:1.5rem}
+  .w-preview{border:1px solid var(--graphite);padding:clamp(1rem,3vw,2rem);min-width:0}
+  .w-preview .post-article{margin:0;padding:0}
+  @media (max-width:899px){
+    .w-split[data-tab="write"] .w-preview,.w-split[data-tab="preview"] .w-write{display:none}
+  }
+  @media (min-width:900px){
+    .w-tabs{display:none}
+    .w-split{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+    .w-preview{max-height:calc(55vh + 3rem);overflow:auto}
+  }
+  .w-help{color:var(--smoke);font-size:.85rem}
+  .w-help code{font-size:.85em}
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#editor">Skip to editor</a>
+
+  <header class="site-header">
+    <a class="mark" href="/" aria-label="David Okunfolami — home">DO</a>
+    <nav aria-label="Site">
+      <a href="/#projects">projects</a>
+      <a href="/blog/">blog</a>
+      <a class="owner-only" href="/desk/">desk</a>
+      <a href="/focus/">focus</a>
+      <a class="owner-only" href="/habits/">habits</a>
+      <a href="/#about">about</a>
+      <a href="/#contact">contact</a>
+    </nav>
+  </header>
+
+  <main class="w-main">
+    <section class="w-hero">
+      <h1 class="page-title"><span class="solid">Write</span></h1>
+      <p class="w-sub">Write a blog post and publish it straight to the site. Posts go live about a minute after you press Publish.</p>
+    </section>
+
+    <!-- 1. connect: a GitHub token that can only write to this one repo, kept in this browser -->
+    <section class="w-sec" id="connect" aria-labelledby="connectH">
+      <div class="w-sec-h"><h2 class="w-label" id="connectH">Connect to GitHub</h2><span class="w-status" id="who"></span></div>
+      <div id="setup">
+        <ol class="w-steps">
+          <li>Open <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">GitHub → New fine-grained token</a>.</li>
+          <li>Name it <b>davidokunfolami.com writer</b> and pick an expiry (90 days is sensible; you'll make a new one after).</li>
+          <li>Repository access: <b>Only select repositories</b> → <b>Dah-vid/davidokunfolami.com</b>.</li>
+          <li>Permissions → Repository permissions → <b>Contents: Read and write</b>. Nothing else.</li>
+          <li>Generate it, copy it, and paste it below. It's stored only in this browser, never on the site.</li>
+        </ol>
+        <div class="w-row" style="margin-top:1rem">
+          <input class="w-input" id="token" type="password" autocomplete="off" spellcheck="false" placeholder="github_pat_…" aria-label="GitHub token" style="max-width:28rem">
+          <button class="w-btn" id="saveToken" type="button">Connect</button>
+        </div>
+      </div>
+      <div class="w-row" id="connected" hidden>
+        <button class="w-btn small danger" id="forget" type="button">Forget token on this device</button>
+      </div>
+      <p class="w-status" id="connectStatus" role="status"></p>
+    </section>
+
+    <!-- 2. the posts already on the site -->
+    <section class="w-sec" aria-labelledby="postsH">
+      <div class="w-sec-h"><h2 class="w-label" id="postsH">Posts</h2><button class="w-btn small" id="newPost" type="button">New post</button></div>
+      <ul class="w-posts" id="posts"></ul>
+    </section>
+
+    <!-- 3. the editor -->
+    <section class="w-sec" id="editor" aria-labelledby="editorH">
+      <div class="w-sec-h"><h2 class="w-label" id="editorH">New post</h2><span class="w-status" id="draftStatus"></span></div>
+      <div class="w-grid">
+        <label class="w-field wide"><span>Title</span><input class="w-input" id="fTitle" maxlength="140" autocomplete="off"></label>
+        <label class="w-field"><span>Address: /blog/post.html?p=…</span><input class="w-input" id="fSlug" maxlength="80" autocomplete="off" spellcheck="false"></label>
+        <label class="w-field"><span>Date</span><input class="w-input" id="fDate" type="date"></label>
+        <label class="w-field wide"><span>Summary, shown on the blog list</span><input class="w-input" id="fSummary" maxlength="280" autocomplete="off"></label>
+      </div>
+      <div class="w-tabs" role="tablist" aria-label="Editor view">
+        <button type="button" role="tab" id="tabWrite" aria-selected="true">Write</button>
+        <button type="button" role="tab" id="tabPreview" aria-selected="false">Preview</button>
+      </div>
+      <div class="w-split" id="split" data-tab="write">
+        <div class="w-write">
+          <label class="w-field"><span>Post, in Markdown</span><textarea class="w-text" id="fBody" spellcheck="true"></textarea></label>
+          <p class="w-help"><code># Heading</code> · <code>**bold**</code> · <code>*italic*</code> · <code>[link](https://…)</code> · <code>- list</code> · <code>&gt; quote</code> · <code>```</code> code block · a blank line starts a new paragraph.</p>
+        </div>
+        <div class="w-preview" aria-label="Preview">
+          <article class="post-article">
+            <header>
+              <h1 class="post-heading" id="pTitle"></h1>
+              <p class="post-date" id="pDate"></p>
+            </header>
+            <div class="post-body" id="pBody"></div>
+          </article>
+        </div>
+      </div>
+      <div class="w-row">
+        <button class="w-btn primary" id="publish" type="button">Publish</button>
+        <button class="w-btn danger" id="discard" type="button">Discard draft</button>
+        <button class="w-btn danger" id="del" type="button" hidden>Delete this post</button>
+      </div>
+      <p class="w-status" id="pubStatus" role="status" aria-live="polite"></p>
+    </section>
+  </main>
+
+  <!-- the blog's own Markdown renderer, so the preview is exactly what the post will look like.
+       blog.js only renders a page when it finds #post-list or #post-body, which this page doesn't have. -->
+  <script src="/blog/blog.js"></script>
+  <script>
+  (function () {
+    const OWNER = "Dah-vid", REPO = "davidokunfolami.com", BRANCH = "main";
+    const API = "https://api.github.com/repos/" + OWNER + "/" + REPO;
+    const $ = (id) => document.getElementById(id);
+    const store = {
+      get: (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } },
+      set: (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {} },
+    };
+    let token = store.get("write:token");
+    let posts = [];            // the index, newest first
+    let editing = null;        // slug of the published post being edited, or null for a new one
+
+    /* ---------- GitHub ---------- */
+    async function gh(path, opts) {
+      opts = opts || {};
+      const res = await fetch(API + path, {
+        method: opts.method || "GET",
+        cache: "no-store",
+        headers: Object.assign({
+          Accept: "application/vnd.github+json",
+          "X-GitHub-Api-Version": "2022-11-28",
+          Authorization: "Bearer " + token,
+        }, opts.body ? { "Content-Type": "application/json" } : {}),
+        body: opts.body ? JSON.stringify(opts.body) : undefined,
+      });
+      if (!res.ok) {
+        let msg = ""; try { msg = (await res.json()).message || ""; } catch (e) {}
+        const err = new Error(msg || "GitHub said " + res.status); err.status = res.status; throw err;
+      }
+      return res.status === 204 ? null : res.json();
+    }
+    const fromB64 = (s) => new TextDecoder().decode(Uint8Array.from(atob(s.replace(/\s/g, "")), (c) => c.charCodeAt(0)));
+    async function readFile(path, ref) {
+      const j = await gh("/contents/" + path.split("/").map(encodeURIComponent).join("/") + "?ref=" + encodeURIComponent(ref || BRANCH));
+      return fromB64(j.content);
+    }
+    // One commit for the whole change (post file + posts.json), built on the current tip of main.
+    // `change(postsJson)` returns {files, message} from the posts.json at that exact commit, so
+    // nothing pushed in the meantime (say, from VS Code) is ever overwritten.
+    async function commitChange(change) {
+      const ref = await gh("/git/ref/heads/" + BRANCH);
+      const parent = ref.object.sha;
+      const base = await gh("/git/commits/" + parent);
+      const index = JSON.parse(await readFile("blog/posts.json", parent));
+      const c = change(index);
+      const tree = await gh("/git/trees", { method: "POST", body: {
+        base_tree: base.tree.sha,
+        tree: c.files.map((f) => f.delete
+          ? { path: f.path, mode: "100644", type: "blob", sha: null }
+          : { path: f.path, mode: "100644", type: "blob", content: f.content }),
+      } });
+      const commit = await gh("/git/commits", { method: "POST", body: { message: c.message, tree: tree.sha, parents: [parent] } });
+      await gh("/git/refs/heads/" + BRANCH, { method: "PATCH", body: { sha: commit.sha } });
+      return c.index;
+    }
+    const indexJson = (list) => JSON.stringify(list, null, 2) + "\n";
+
+    /* ---------- connect ---------- */
+    function showConnected(label) {
+      $("setup").hidden = !!label; $("connected").hidden = !label;
+      $("who").textContent = label || "";
+    }
+    async function verify() {
+      if (!token) { showConnected(null); return false; }
+      $("connectStatus").textContent = "Checking the token…";
+      try {
+        const repo = await gh("");
+        if (repo.permissions && repo.permissions.push === false) throw Object.assign(new Error("This token can read the repo but not write to it. Give it Contents: Read and write."), { status: 403 });
+        $("connectStatus").textContent = ""; showConnected("Connected · can publish");
+        return true;
+      } catch (e) {
+        showConnected(null);
+        $("connectStatus").textContent = e.status === 401 ? "GitHub didn't accept that token (expired or mistyped). Make a new one with the steps above."
+          : e.status === 404 ? "That token can't see Dah-vid/davidokunfolami.com. Under Repository access, pick that repo."
+          : "Couldn't connect: " + e.message;
+        return false;
+      }
+    }
+    $("saveToken").onclick = async () => {
+      const t = $("token").value.trim(); if (!t) return;
+      token = t; $("token").value = "";
+      if (await verify()) { store.set("write:token", t); loadPosts(); } else token = null;
+    };
+    $("forget").onclick = () => {
+      if (!confirm("Forget the GitHub token on this device? You'll need to paste a token again to publish from here.")) return;
+      store.set("write:token", null); token = null; showConnected(null); $("connectStatus").textContent = "Token removed from this device.";
+    };
+
+    /* ---------- posts ---------- */
+    async function loadPosts() {
+      try {
+        const list = token ? JSON.parse(await readFile("blog/posts.json")) : await (await fetch("/blog/posts.json", { cache: "no-cache" })).json();
+        posts = list.slice().sort((a, b) => (a.date < b.date ? 1 : -1));
+      } catch (e) { posts = []; }
+      renderPosts();
+    }
+    function renderPosts() {
+      const ul = $("posts"); ul.textContent = "";
+      if (!posts.length) { const li = document.createElement("li"); li.textContent = "No posts yet."; ul.append(li); return; }
+      posts.forEach((p) => {
+        const li = document.createElement("li");
+        const t = document.createElement("span"); t.className = "t"; t.textContent = p.title;
+        const d = document.createElement("span"); d.className = "d"; d.textContent = formatDate(p.date) + " · " + p.slug;
+        const b = document.createElement("button"); b.type = "button"; b.className = "w-btn small"; b.textContent = editing === p.slug ? "Editing" : "Edit";
+        b.disabled = editing === p.slug;
+        b.onclick = () => openPost(p);
+        li.append(t, d, b); ul.append(li);
+      });
+    }
+    async function openPost(p) {
+      if (dirty() && !confirm("Replace the draft you're working on with \"" + p.title + "\"?")) return;
+      $("pubStatus").className = "w-status"; $("pubStatus").textContent = "Opening…";
+      try {
+        const body = token ? await readFile("blog/posts/" + p.slug + ".md") : await (await fetch("/blog/posts/" + encodeURIComponent(p.slug) + ".md", { cache: "no-cache" })).text();
+        fill({ editing: p.slug, title: p.title, slug: p.slug, date: p.date, summary: p.summary, body });
+        $("pubStatus").textContent = "";
+        $("editor").scrollIntoView({ behavior: "smooth", block: "start" });
+      } catch (e) { fail("Couldn't open that post: " + e.message); }
+    }
+
+    /* ---------- editor + draft ---------- */
+    const today = () => { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
+    const slugify = (s) => s.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/['’]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80).replace(/-+$/, "");
+    let slugTouched = false;
+    const val = () => ({ editing, title: $("fTitle").value, slug: $("fSlug").value, date: $("fDate").value, summary: $("fSummary").value, body: $("fBody").value, slugTouched });
+    // unsaved = what's in the editor differs from what was last opened or published
+    let loaded = "";
+    const snapshot = () => { const v = val(); return JSON.stringify([v.title, v.slug, v.date, v.summary, v.body]); };
+    const dirty = () => { const v = val(); return !!(v.title.trim() || v.summary.trim() || v.body.trim()) && snapshot() !== loaded; };
+    function fill(d) {
+      editing = d.editing || null; slugTouched = !!d.slugTouched || !!editing;
+      $("fTitle").value = d.title || ""; $("fSlug").value = d.slug || ""; $("fDate").value = d.date || today();
+      $("fSummary").value = d.summary || ""; $("fBody").value = d.body || "";
+      $("fSlug").readOnly = !!editing; // a post's address is fixed once published: comments are tied to it
+      $("editorH").textContent = editing ? "Editing: " + (d.title || editing) : "New post";
+      $("del").hidden = !editing; $("publish").textContent = editing ? "Publish changes" : "Publish";
+      // a published post as opened counts as clean; a restored draft of new writing doesn't
+      loaded = d.clean || d.editing && !d.restored ? snapshot() : JSON.stringify(["", "", $("fDate").value, "", ""]);
+      preview(); saveDraft(); renderPosts();
+    }
+    function preview() {
+      $("pTitle").textContent = $("fTitle").value || "Untitled";
+      $("pDate").textContent = $("fDate").value ? formatDate($("fDate").value) : "";
+      $("pBody").innerHTML = renderMarkdown($("fBody").value || "");
+    }
+    let draftTimer = null;
+    function saveDraft() {
+      if (!dirty()) { store.set("write:draft", null); $("draftStatus").textContent = ""; return; }
+      store.set("write:draft", JSON.stringify(val()));
+      $("draftStatus").textContent = editing ? "Unpublished changes, saved on this device" : "Draft saved on this device";
+    }
+    ["fTitle", "fSlug", "fDate", "fSummary", "fBody"].forEach((id) => $(id).addEventListener("input", () => {
+      if (id === "fTitle" && !slugTouched && !editing) $("fSlug").value = slugify($("fTitle").value);
+      if (id === "fSlug") slugTouched = true;
+      preview(); clearTimeout(draftTimer); draftTimer = setTimeout(saveDraft, 400);
+    }));
+    $("newPost").onclick = () => { if (dirty() && !confirm("Start a new post? The current draft will be cleared.")) return; fill({}); $("fTitle").focus(); };
+    $("discard").onclick = () => {
+      if ((dirty() || editing) && !confirm(editing ? "Stop editing and clear the editor? The published post isn't changed." : "Discard this draft?")) return;
+      store.set("write:draft", null); fill({}); $("draftStatus").textContent = ""; $("pubStatus").textContent = "";
+    };
+    const setTab = (t) => { $("split").dataset.tab = t; $("tabWrite").setAttribute("aria-selected", String(t === "write")); $("tabPreview").setAttribute("aria-selected", String(t === "preview")); };
+    $("tabWrite").onclick = () => setTab("write"); $("tabPreview").onclick = () => { preview(); setTab("preview"); };
+
+    /* ---------- publish / delete ---------- */
+    function fail(msg) { const s = $("pubStatus"); s.className = "w-status err"; s.textContent = msg; }
+    function check() {
+      const v = val();
+      if (!token) return "Connect to GitHub first (top of the page).";
+      if (!v.title.trim()) return "Give the post a title.";
+      if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(v.slug)) return "The address can only use lowercase letters, numbers and single dashes.";
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(v.date)) return "Pick a date.";
+      if (!v.summary.trim()) return "Add a one-line summary for the blog list.";
+      if (!v.body.trim()) return "The post is empty.";
+      return null;
+    }
+    function done(slug, verb) {
+      const s = $("pubStatus"); s.className = "w-status"; s.textContent = verb + ". Live in about a minute at ";
+      const a = document.createElement("a"); a.href = "/blog/post.html?p=" + encodeURIComponent(slug); a.textContent = "/blog/post.html?p=" + slug;
+      s.append(a, " (if it looks old, refresh once more).");
+    }
+    $("publish").onclick = async () => {
+      const problem = check(); if (problem) return fail(problem);
+      const v = val(), title = v.title.trim(), entry = { slug: v.slug, title, date: v.date, summary: v.summary.trim() };
+      const body = v.body.replace(/\r\n/g, "\n").replace(/\s+$/, "") + "\n";
+      const btn = $("publish"); btn.disabled = true; $("pubStatus").className = "w-status"; $("pubStatus").textContent = "Publishing…";
+      try {
+        const index = await commitChange((list) => {
+          const at = list.findIndex((p) => p.slug === v.slug);
+          if (at >= 0 && editing !== v.slug) throw Object.assign(new Error("There's already a post at that address. Change the address, or open that post from the list to edit it."), { mine: true });
+          if (at >= 0) list[at] = entry; else list.push(entry);
+          return { index: list, message: (at >= 0 ? "Blog: update " : "Blog: publish ") + title,
+            files: [{ path: "blog/posts/" + v.slug + ".md", content: body }, { path: "blog/posts.json", content: indexJson(list) }] };
+        });
+        const wasEdit = !!editing;
+        posts = index.slice().sort((a, b) => (a.date < b.date ? 1 : -1));
+        store.set("write:draft", null);
+        fill({ editing: v.slug, title, slug: v.slug, date: v.date, summary: entry.summary, body });
+        $("draftStatus").textContent = "";
+        done(v.slug, wasEdit ? "Changes published" : "Published");
+      } catch (e) {
+        fail(e.mine ? e.message : e.status === 401 ? "GitHub didn't accept the token (it may have expired). Your draft is safe here; connect a new token and press Publish again."
+          : e.status === 409 || e.status === 422 ? "Something else was pushed at the same moment. Your draft is safe; press Publish again."
+          : "Couldn't publish: " + e.message + ". Your draft is still saved on this device.");
+      } finally { btn.disabled = false; }
+    };
+    $("del").onclick = async () => {
+      if (!editing) return;
+      const p = posts.find((x) => x.slug === editing), title = p ? p.title : editing;
+      if (!token) return fail("Connect to GitHub first (top of the page).");
+      if (!confirm("Delete \"" + title + "\" from the site? It disappears from the blog about a minute later. (It stays in the repo's history, so it can be brought back.)")) return;
+      $("pubStatus").className = "w-status"; $("pubStatus").textContent = "Deleting…";
+      try {
+        const slug = editing;
+        const index = await commitChange((list) => {
+          const next = list.filter((x) => x.slug !== slug);
+          return { index: next, message: "Blog: delete " + title, files: [{ path: "blog/posts/" + slug + ".md", delete: true }, { path: "blog/posts.json", content: indexJson(next) }] };
+        });
+        posts = index.slice().sort((a, b) => (a.date < b.date ? 1 : -1));
+        store.set("write:draft", null); fill({});
+        $("pubStatus").textContent = "Deleted \"" + title + "\". It leaves the blog in about a minute.";
+      } catch (e) { fail("Couldn't delete: " + e.message); }
+    };
+
+    /* ---------- start ---------- */
+    let draft = null; try { draft = JSON.parse(store.get("write:draft") || "null"); } catch (e) {}
+    fill(draft ? Object.assign(draft, { restored: true }) : {});
+    if (draft && (draft.title || draft.body)) $("draftStatus").textContent = "Draft restored from this device";
+    verify().then(loadPosts);
+  })();
+  </script>
+</body>
+</html>
