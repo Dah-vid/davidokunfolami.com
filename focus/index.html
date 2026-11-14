@@ -31,6 +31,9 @@ body[data-phase="focus"],body[data-phase="wrap"],body[data-phase="break"]{--phas
 body[data-phase="break"] .deck{
   --bg:var(--paper); --panel:#dedad3; --raised:var(--paper); --ink:var(--carbon); --muted:#4a4e52; --line:#c4c0b9;
   --phase:var(--carbon); --phase-soft:#cfcbc4; --ok:var(--carbon); --danger:var(--carbon);
+  /* the reason pills (Bored, Don't want to think, Remembered a task) use these: without them
+     they stayed paper-on-paper and vanished from "Parked during that block" */
+  --amber:var(--carbon); --focus:var(--carbon); --break:var(--carbon);
 }
 
 [hidden]{display:none!important}
