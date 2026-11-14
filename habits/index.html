@@ -271,8 +271,14 @@ const set = (k, v) => { try { localStorage.setItem(P + k, JSON.stringify(v)); } 
 
 const KIND_LABEL = {full:'Full', min:'Minimum', reserve:'Reserve'};
 const RESERVE_REASONS = ['Tired', 'No time', 'Ill', 'Other'];
-const SUBJECTS = [{id:'neetcode', label:'NeetCode'}, {id:'build', label:'Build'}, {id:'sysdesign', label:'System design'}, {id:'textbook', label:'Textbook'}];
+/* Subjects belong to Focus Desk (focusdesk:settings.subjects, edited in its Settings). These four
+   are the labels of the original built-in ones, for blocks logged before subjects became editable;
+   DEFAULT_MAPPING keeps them linked to the matching habits. */
+const LEGACY_SUBJECTS = [{id:'neetcode', label:'NeetCode'}, {id:'build', label:'Build'}, {id:'sysdesign', label:'System design'}, {id:'textbook', label:'Textbook'}];
 const DEFAULT_MAPPING = {neetcode:'neetcode', build:'building', sysdesign:'sysdesign', textbook:'textbook'};
+// Focus Desk's subjects; a Focus Desk from before editable subjects (settings saved, no list yet) still means the original four
+const fdSubjects = () => { try { const s = JSON.parse(localStorage.getItem('focusdesk:settings') || 'null'); return s && Array.isArray(s.subjects) ? s.subjects : s ? LEGACY_SUBJECTS : []; } catch (e) { return []; } };
+const subjectLabel = id => ((fdSubjects().find(s => s.id === id) || LEGACY_SUBJECTS.find(s => s.id === id)) || {label:id}).label;
 /* Example habits for a first visit. They're only used when this browser has no habits saved, so
    an existing setup never changes; to bring yours to a new device, use Settings → Import backup.
    The ids of the four study habits match DEFAULT_MAPPING (and Focus Desk's), so subjects still log. */
@@ -414,7 +420,8 @@ const saveSettings = () => set('settings', settings);
 const saveEntries = () => set('entries', {entries});
 
 const entryFor = (habitId, day) => { let best = null; for (const e of entries) if (e.habitId === habitId && e.day === day && RANK[e.kind] && (!best || better(e, best))) best = e; return best; };
-const isHeavy = h => Object.values(settings.mapping).includes(h.id); // logged by Focus Desk subjects
+// fed by a Focus Desk subject that actually exists, so Full has to come from a timed block
+const isHeavy = h => fdSubjects().some(s => !s.archived && settings.mapping[s.id] === h.id);
 const reservesUsed = (h, day) => { const w = mondayOf(day), end = addDays(w, 6); return entries.filter(e => e.habitId === h.id && e.kind === 'reserve' && e.day >= w && e.day <= end).length; };
 const weekStatus = (h, day) => { const w = mondayOf(day), end = addDays(w, 6); let done = 0, res = 0; entries.forEach(e => { if (e.habitId === h.id && e.day >= w && e.day <= end) e.kind === 'reserve' ? res++ : RANK[e.kind] && done++; }); return {done, res, target:Math.max(1, (h.target || 1) - res)}; };
 // a past day stays open until 48 hours after it ended
@@ -606,7 +613,6 @@ function renderStreaks(){
    Answers save as you type into habits:reviews ({reviews:{"2026-W45":{...}}}), re-read before
    each write so another tab's answers are kept. A review is done once all three are answered. */
 const TAG_LABEL = {autopilot:'Autopilot', bored:'Bored', effort:"Don't want to think", stuck:'Stuck', task:'Remembered a task', idea:'New idea'};
-const SUBJECT_LABEL = Object.fromEntries(SUBJECTS.map(s => [s.id, s.label]));
 const REVIEW_QS = {q1:'What got done on minimums, and why?', q2:"Which subject pushed me out most, and what's the cause (too easy / too hard / pointless)?", q3:'One change for next week:'};
 const loadReviews = () => { const s = get('reviews'); return s && s.reviews && typeof s.reviews === 'object' ? s.reviews : {}; };
 const fdGet = k => { try { const v = localStorage.getItem('focusdesk:' + k); return v ? JSON.parse(v) : null; } catch (e) { return null; } };
@@ -662,7 +668,7 @@ function renderReview(){
     [String(f.minutes), 'minutes focused'],
     [f.perHour == null ? '–' : f.perHour.toFixed(1), 'urges per focus hour'],
     [f.topTag ? TAG_LABEL[f.topTag.id] || f.topTag.id : '–', f.topTag ? 'top urge reason (' + f.topTag.n + ')' : 'top urge reason (none tagged)'],
-    [f.topSubject ? SUBJECT_LABEL[f.topSubject.id] || f.topSubject.id : '–', f.topSubject ? 'subject with most urges (' + f.topSubject.n + ')' : 'subject with most urges'],
+    [f.topSubject ? subjectLabel(f.topSubject.id) : '–', f.topSubject ? 'subject with most urges (' + f.topSubject.n + ')' : 'subject with most urges'],
     [w.bedtime && w.bedtime.nights ? Math.round(w.bedtime.hit / w.bedtime.nights * 100) + '%' : '–',
       w.bedtime ? 'bedtime hit, ' + w.bedtime.hit + ' of ' + plural(w.bedtime.nights, 'night') + (w.bedtime.full ? ' (' + w.bedtime.full + ' Full)' : '') : 'bedtime (no Bedtime habit)']
   ];
@@ -711,7 +717,9 @@ function renderSettings(){
     row.append(tools); box.append(row);
   });
   const map = $('mapping'); map.textContent = '';
-  SUBJECTS.forEach(s => {
+  const subjects = fdSubjects().filter(s => !s.archived);
+  if (!subjects.length) map.append(el('p', 'why', 'No subjects yet. Add them in Focus Desk → Settings → Subjects, then choose here which habit each one logs.'));
+  subjects.forEach(s => {
     const r = el('label', 'maprow'), sel = el('select', 'field');
     const none = el('option', null, "Don't log"); none.value = ''; sel.append(none);
     habits.filter(h => !h.window).forEach(h => { const o = el('option', null, h.name); o.value = h.id; sel.append(o); });
@@ -783,7 +791,7 @@ fromHash(); window.addEventListener('hashchange', fromHash);
 // Focus Desk (another tab) wrote an entry or a block: pick it up
 window.addEventListener('storage', ev => {
   if (!ev.key || ev.key.startsWith(P)) { habits = loadHabits(); settings = loadSettings(); entries = loadEntries(); render(); }
-  else if (ev.key.startsWith('focusdesk:')) renderReview();
+  else if (ev.key.startsWith('focusdesk:')) { renderReview(); renderSettings(); } // blocks, or subjects edited in Focus Desk
 });
 // re-render when the day rolls over or Bedtime's window opens/closes, so a page left open stays honest
 const clockKey = () => ymd(new Date()) + habits.filter(h => h.window).map(h => inWindow(h.window, new Date())).join();

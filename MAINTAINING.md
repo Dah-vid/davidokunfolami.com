@@ -167,9 +167,17 @@ and colour tokens from `/styles.css`.
 - **Focus days** (header button → panel) shows the active-day counts and a
   heatmap from `computeStreak()`, a pure function over `log.blocks`. Streak
   numbers moved to Habits on purpose.
-- **Subjects → Habits**: a saved block with a subject (NeetCode, Build,
-  System design, Textbook) writes into `habits:entries`: 25+ focused
-  minutes = Full, 10+ = Minimum, less = nothing. See `logToHabits()`.
+- **Subjects** are each person's own (Settings → Subjects; stored as
+  `settings.subjects`). A visitor starts with none, so the Subject row stays
+  hidden until they add one. Your four (NeetCode, Build, System design,
+  Textbook: `LEGACY_SUBJECTS`) are carried over automatically on your devices
+  (owner mode, or any browser whose saved blocks use them). Removing a
+  subject only archives it, so old blocks keep their label.
+- **Subjects → Habits**: a saved block whose subject is linked to a habit
+  (Habits → Settings → Focus Desk subjects) writes into `habits:entries`:
+  25+ focused minutes = Full, 10+ = Minimum, less = nothing. See
+  `logToHabits()`. Your four stay linked through `DEFAULT_SUBJECT_MAP`; new
+  subjects log nothing until linked.
 - **Wind-down / morning**: from the wind-down time (Settings, default 21:30)
   until 04:00 the idle view says "Rest now" and caps a block at 25 min;
   05:00–09:00 it leads with the resume note. Labels only, nothing blocked.

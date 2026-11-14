@@ -200,6 +200,11 @@ body[data-phase="idle"] .rule .kw{color:var(--muted)}
 .settings label{font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:4px}
 .settings .field{padding:6px 10px;font-family:var(--mono)}
 .settings .inline{flex-direction:row;align-items:center;gap:8px;color:var(--ink)}
+.subj-set{grid-column:1/-1;display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line);padding-top:12px}
+.subj-chip{display:inline-flex;align-items:center;gap:2px;border:1px solid var(--line);padding:1px 2px 1px 10px;font-size:13px}
+.subj-chip .x{padding:0 6px}
+.subj-add{display:flex;gap:8px;max-width:320px}
+.subj-add .field{flex:1;min-width:0}
 .data-row{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:center;gap:10px;border-top:1px solid var(--line);padding-top:12px}
 .data-status{font-size:13px;color:var(--muted)}
 
@@ -281,6 +286,15 @@ body[data-phase="idle"] .rule .kw{color:var(--muted)}
     <label for="sWind">Wind-down from<input class="field" id="sWind" type="time"></label>
     <label for="sFirst">First block at<input class="field" id="sFirst" type="time"></label>
     <div><button class="btn small" id="testAlarm" type="button">Test alarm</button></div>
+    <div class="subj-set">
+      <span class="eyebrow">Subjects</span>
+      <p class="why">Tag a block with what you're working on; you pick one before you start.</p>
+      <div class="tags" id="subjEdit"></div>
+      <div class="subj-add">
+        <input class="field" id="subjNew" maxlength="24" autocomplete="off" aria-label="New subject" placeholder="e.g. Maths">
+        <button class="btn small" id="subjAdd" type="button">Add</button>
+      </div>
+    </div>
     <p class="pip-note" id="pipNote">The floating mini timer needs Chrome or Edge. In other browsers, keep this tab in a small window pinned on top instead (on Windows, PowerToys "Always On Top": Win + Ctrl + T).</p>
     <div class="data-row">
       <span class="eyebrow">Your data</span>
@@ -321,10 +335,10 @@ body[data-phase="idle"] .rule .kw{color:var(--muted)}
             <label class="lbl" for="goal">This block I will…</label>
             <input class="field" id="goal" autocomplete="off" placeholder="e.g. Solve Valid Anagram, then explain it out loud">
           </div>
-          <div class="subject-row">
+          <div class="subject-row" id="subjectRow" hidden>
             <span class="eyebrow">Subject</span>
-            <div class="tags" id="subjects" role="group" aria-label="Subject, logs to Habits"></div>
-            <span class="why">25+ min logs Full in <a href="/habits/">Habits</a>, 10+ min logs Minimum.</span>
+            <div class="tags" id="subjects" role="group" aria-label="Subject"></div>
+            <span class="why" id="subjectWhy" hidden>25+ min logs Full in <a href="/habits/">Habits</a>, 10+ min logs Minimum.</span>
           </div>
           <div class="checks" id="checks" role="group" aria-label="Before you start"></div>
           <details class="dump" id="dumpBox">
@@ -575,8 +589,24 @@ const todaysBlocks = () => log.blocks.filter(b => dayKey(b.end) === dayKey(now()
    One entry per habit per day, the best one seen (Full beats Minimum). The subject → habit
    mapping is edited on the Habits page (habits:settings). Works before Habits has ever been
    opened: it picks the entries up when it is. */
-const SUBJECTS = [{id:'neetcode', label:'NeetCode'}, {id:'build', label:'Build'}, {id:'sysdesign', label:'System design'}, {id:'textbook', label:'Textbook'}];
+/* Subjects are each person's own: settings.subjects = [{id, label, archived?}], edited in Settings.
+   A new visitor starts with none (the Subject row stays hidden until they add one). The four
+   below were the built-in list before subjects became editable; they're carried over on David's
+   devices (owner mode) and in any browser whose saved blocks already use them. Removing a subject
+   only archives it, so old blocks keep their label. */
+const LEGACY_SUBJECTS = [{id:'neetcode', label:'NeetCode'}, {id:'build', label:'Build'}, {id:'sysdesign', label:'System design'}, {id:'textbook', label:'Textbook'}];
 const DEFAULT_SUBJECT_MAP = {neetcode:'neetcode', build:'building', sysdesign:'sysdesign', textbook:'textbook'};
+const MAX_SUBJECTS = 8;
+function seedSubjects(){
+  if (settings.subjectsSet) return;
+  let owner = false; try { owner = !!localStorage.getItem('site:owner'); } catch (e) {}
+  const used = log.blocks.some(b => LEGACY_SUBJECTS.some(s => s.id === b.subject));
+  if (owner || used){ settings.subjects = LEGACY_SUBJECTS.map(s => Object.assign({}, s)); settings.subjectsSet = true; saveSettings(); }
+  else if (!Array.isArray(settings.subjects)) settings.subjects = [];
+}
+const activeSubjects = () => (settings.subjects || []).filter(s => !s.archived);
+const subjectById = id => id && ((settings.subjects || []).find(s => s.id === id) || LEGACY_SUBJECTS.find(s => s.id === id)) || null;
+seedSubjects();
 const habitsGet = k => { try { const v = localStorage.getItem('habits:' + k); return v ? JSON.parse(v) : null; } catch (e) { return null; } };
 const habitsSet = (k, v) => { try { localStorage.setItem('habits:' + k, JSON.stringify(v)); } catch (e) {} };
 const ymd = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
@@ -894,8 +924,8 @@ function renderTimer(){
     const isBreak = p === 'break';
     const g = isBreak ? (T.longBreak ? 'Long break. You have earned it.' : 'Break. Step away from the screen.') : (T.block && T.block.goal) || 'No goal set for this block';
     $('goalNow').textContent = g; $('goalNow').classList.toggle('empty', !isBreak && !(T.block && T.block.goal));
-    const sub = !isBreak && T.block && SUBJECTS.find(s => s.id === T.block.subject);
-    $('subjectNow').hidden = !sub; if (sub) $('subjectNow').textContent = sub.label + ' · logs to Habits';
+    const sub = !isBreak && T.block && subjectById(T.block.subject);
+    $('subjectNow').hidden = !sub; if (sub) $('subjectNow').textContent = sub.label + (subjectHabit(sub.id) ? ' · logs to Habits' : '');
     $('pauseBtn').textContent = T.running ? 'Pause' : 'Resume';
     $('endBtn').hidden = isBreak; $('skipBreakBtn').hidden = !isBreak;
     $('focusExtras').hidden = isBreak || !settings.rules.length; $('breakExtras').hidden = !isBreak;
@@ -909,7 +939,7 @@ function renderTimer(){
     const m = Math.round((T.focusMs || 0) / 60000);
     const r = (T.block && T.block.reps) || 0;
     // say up front what saving will write to Habits, so it's never a surprise
-    const sub = T.block && SUBJECTS.find(s => s.id === T.block.subject), k = habitKind(m);
+    const sub = T.block && subjectById(T.block.subject), k = habitKind(m);
     const toHabits = !sub || !subjectHabit(sub.id) ? '' : k ? ' Saving logs ' + sub.label + ' as ' + (k === 'full' ? 'Full' : 'Minimum') + ' in Habits.' : ' Under 10 minutes, so nothing goes to Habits.';
     $('wrapSub').textContent = m + ' min focused, ' + (r ? r + (r === 1 ? ' exercise' : ' exercises') + ' finished, ' : '') + n + (n === 1 ? ' distraction' : ' distractions') + ' logged.' + toHabits + (T.completed ? '' : ' Ending early is information, not failure. If it keeps happening, try a shorter block.');
     document.title = 'Wrap up · Focus Desk';
@@ -917,12 +947,40 @@ function renderTimer(){
   renderPip();
 }
 function renderSubjects(){
-  const box = $('subjects'); box.textContent = '';
-  SUBJECTS.forEach(s => {
+  const list = activeSubjects(), box = $('subjects'); box.textContent = '';
+  if (T.subject && !list.some(s => s.id === T.subject)) { T.subject = null; saveTimer(); } // removed in Settings
+  $('subjectRow').hidden = !list.length; // no subjects yet: no row (add them in Settings)
+  list.forEach(s => {
     const b = el('button', 'tag', s.label); b.type = 'button'; b.setAttribute('aria-pressed', T.subject === s.id ? 'true' : 'false');
     b.onclick = () => { T.subject = T.subject === s.id ? null : s.id; saveTimer(); renderSubjects(); };
     box.appendChild(b);
   });
+  // only mention Habits when a subject actually logs to one
+  $('subjectWhy').hidden = !list.some(s => subjectHabit(s.id));
+}
+/* Settings → Subjects: add, remove (archive), and put back */
+function renderSubjectEditor(){
+  const box = $('subjEdit'); box.textContent = '';
+  const list = activeSubjects();
+  if (!list.length) box.append(el('span', 'why', 'None yet. Add what you work on, e.g. Maths, Reading, Side project.'));
+  list.forEach(s => {
+    const chip = el('span', 'subj-chip'); chip.append(el('span', null, s.label));
+    const x = el('button', 'x', '×'); x.type = 'button'; x.setAttribute('aria-label', 'Remove subject ' + s.label);
+    x.onclick = () => { s.archived = true; settings.subjectsSet = true; saveSettings(); renderSubjectEditor(); renderSubjects(); };
+    chip.append(x); box.append(chip);
+  });
+  $('subjAdd').disabled = list.length >= MAX_SUBJECTS;
+  $('subjNew').placeholder = list.length >= MAX_SUBJECTS ? 'Up to ' + MAX_SUBJECTS + ' subjects' : 'e.g. Maths';
+}
+function addSubject(){
+  const label = $('subjNew').value.trim().replace(/\s+/g, ' ').slice(0, 24);
+  if (!label || activeSubjects().length >= MAX_SUBJECTS) return;
+  settings.subjects = settings.subjects || [];
+  const same = settings.subjects.find(s => s.label.toLowerCase() === label.toLowerCase());
+  if (same) same.archived = false; // re-adding a removed one brings it (and its Habits link) back
+  else settings.subjects.push({id:'s-' + mkId(), label});
+  settings.subjectsSet = true; saveSettings();
+  $('subjNew').value = ''; renderSubjectEditor(); renderSubjects();
 }
 function renderChecks(){
   const box = $('checks'); box.textContent = '';
@@ -1127,8 +1185,8 @@ function exportData(){
   const data = {
     app:'focus-desk', version:1, exportedAt:new Date().toISOString(),
     timezone:Intl.DateTimeFormat().resolvedOptions().timeZone,
-    notes:'blocks = focus sessions (planned/focused minutes, completed = ran to the end, reps = exercises finished, subject = what it was for; a block with a subject also logs to Habits). journal = urges to switch, tagged with why; blockId links an urge to the block it happened in.',
-    settings:{focusMin:settings.focusMin, breakMin:settings.breakMin, longBreakMin:settings.longBreakMin, rules:settings.rules},
+    notes:'blocks = focus sessions (planned/focused minutes, completed = ran to the end, reps = exercises finished, subject = id of what it was for, see settings.subjects for its label; a block whose subject is linked to a habit also logs to Habits). journal = urges to switch, tagged with why; blockId links an urge to the block it happened in.',
+    settings:{focusMin:settings.focusMin, breakMin:settings.breakMin, longBreakMin:settings.longBreakMin, rules:settings.rules, subjects:settings.subjects || []},
     blocks:log.blocks.map(b => Object.assign({}, b, {startTime:iso(b.start), endTime:iso(b.end)})),
     journal:journal.entries.map(e => Object.assign({}, e, {time:iso(e.at), tagLabel:tagLabel(e.tag)})),
     raw:{settings, journal, log}
@@ -1157,7 +1215,11 @@ async function importData(file){
     journal.entries = j.merged.sort((x, y) => x.at - y.at);
     log.blocks = b.merged.sort((x, y) => x.end - y.end);
     settings.rules = r.merged;
-    saveJournal(); saveLog(); saveSettings(); renderAll();
+    // subjects come along too, so imported blocks keep their labels (and new ones stay linkable)
+    const sub = mergeById(settings.subjects || [], raw.settings && raw.settings.subjects);
+    settings.subjects = sub.merged; if (sub.added) settings.subjectsSet = true;
+    seedSubjects();
+    saveJournal(); saveLog(); saveSettings(); renderAll(); renderSubjectEditor();
     $('dataStatus').textContent = 'Imported ' + j.added + ' new entries and ' + b.added + ' new blocks. Existing data was kept.';
   } catch (e) {
     $('dataStatus').textContent = "That file couldn't be read as a Focus Desk export. Choose a file made with the Export button.";
@@ -1174,6 +1236,9 @@ $('importFile').addEventListener('change', async () => {
 /* ---------- deck controls ---------- */
 $('startBtn').onclick = startFocus;
 $('goal').addEventListener('keydown', e => { if (e.key === 'Enter') startFocus(); });
+$('subjAdd').onclick = addSubject;
+$('subjNew').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addSubject(); } });
+renderSubjectEditor();
 $('goal').addEventListener('input', renderPip);
 $('pauseBtn').onclick = () => T.running ? pause() : resume();
 $('endBtn').onclick = () => finishFocus(false);
