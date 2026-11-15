@@ -310,6 +310,16 @@ const RANK = {full:3, min:2, reserve:1};
 // an entry recorded by Focus Desk beats a manual one.
 const better = (a, b) => (RANK[a.kind] || 0) !== (RANK[b.kind] || 0) ? (RANK[a.kind] || 0) > (RANK[b.kind] || 0) : a.source === 'focusdesk' && b.source !== 'focusdesk';
 
+/* A weekly habit's target for the week starting on monday. A changed target starts the next Monday,
+   so past weeks keep the target they were done against (raising it never breaks a streak after
+   the fact, lowering it never rescues the week in progress). targets = [{from:monday, target}],
+   oldest first; h.target is always the newest. */
+const targetFor = (h, monday) => {
+  let t = null;
+  for (const x of Array.isArray(h.targets) ? h.targets : []) if (x && x.from <= monday) t = x.target;
+  return t == null ? (Array.isArray(h.targets) && h.targets.length ? h.targets[0].target : h.target) || 1 : t;
+};
+
 // Habits that keep the Learning streak going. Habits saved before the flag existed: the four study ones.
 const LEARNING_IDS = ['neetcode', 'building', 'sysdesign', 'textbook'];
 const isLearning = h => !!h && (typeof h.learning === 'boolean' ? h.learning : LEARNING_IDS.includes(h.id));
@@ -338,7 +348,7 @@ function computeStreaks(habits, entries, todayDate){
     let current = 0, longest = 0, thisWeekCounted = false;
     if (h.cadence === 'weekly'){
       // a Mon–Sun week counts when Full + Minimum >= target, each Reserve lowering the target by 1 (floor 1)
-      const counted = w => { let done = 0, res = 0; for (let i = 0; i < 7; i++){ const e = days.get(addDays(w, i)); if (e) e.kind === 'reserve' ? res++ : done++; } return done >= Math.max(1, (h.target || 1) - res); };
+      const counted = w => { let done = 0, res = 0; for (let i = 0; i < 7; i++){ const e = days.get(addDays(w, i)); if (e) e.kind === 'reserve' ? res++ : done++; } return done >= Math.max(1, targetFor(h, w) - res); };
       const thisWeek = mondayOf(today);
       thisWeekCounted = counted(thisWeek);
       if (keys.length){
@@ -401,7 +411,7 @@ function weekReview(habits, entries, blocks, journal, monday, todayDate){
     }
     const done = full + min;
     // same rule as the streaks: each Reserve lowers the target by 1 (floor 1 for weekly habits)
-    const target = h.cadence === 'weekly' ? Math.max(1, (h.target || 1) - reserve) : Math.max(0, open - reserve);
+    const target = h.cadence === 'weekly' ? Math.max(1, targetFor(h, monday) - reserve) : Math.max(0, open - reserve);
     const row = {id:h.id, name:h.name, cadence:h.cadence, full, min, reserve, done, target, days:open, met:target > 0 && done >= target};
     if (h.window && !bedtime) bedtime = {name:h.name, hit:done, nights:open, full, min};
     return row;
@@ -440,7 +450,7 @@ const entryFor = (habitId, day) => { let best = null; for (const e of entries) i
 // fed by a Focus Desk subject that actually exists, so Full has to come from a timed block
 const isHeavy = h => fdSubjects().some(s => !s.archived && settings.mapping[s.id] === h.id);
 const reservesUsed = (h, day) => { const w = mondayOf(day), end = addDays(w, 6); return entries.filter(e => e.habitId === h.id && e.kind === 'reserve' && e.day >= w && e.day <= end).length; };
-const weekStatus = (h, day) => { const w = mondayOf(day), end = addDays(w, 6); let done = 0, res = 0; entries.forEach(e => { if (e.habitId === h.id && e.day >= w && e.day <= end) e.kind === 'reserve' ? res++ : RANK[e.kind] && done++; }); return {done, res, target:Math.max(1, (h.target || 1) - res)}; };
+const weekStatus = (h, day) => { const w = mondayOf(day), end = addDays(w, 6); let done = 0, res = 0; entries.forEach(e => { if (e.habitId === h.id && e.day >= w && e.day <= end) e.kind === 'reserve' ? res++ : RANK[e.kind] && done++; }); return {done, res, target:Math.max(1, targetFor(h, w) - res)}; };
 // a past day stays open until 48 hours after it ended
 const within48 = day => { const d = dateOf(day); return now() - new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1).getTime() < 48 * 3600e3; };
 
@@ -752,7 +762,12 @@ function renderSettings(){
     sel.value = h.cadence; sel.disabled = !!h.window;
     sel.addEventListener('change', () => { h.cadence = sel.value; saveHabits(); render(); });
     cad.append(sel); row.append(cad);
-    if (h.cadence === 'weekly') row.append(input('Weekly target', h.target, null, v => { h.target = v; }, [1, 7]));
+    if (h.cadence === 'weekly'){
+      const l = input('Weekly target', h.target, null, v => setTarget(h, v), [1, 7]);
+      const next = addDays(mondayOf(ymd(new Date())), 7), now = targetFor(h, mondayOf(ymd(new Date())));
+      if (now !== h.target) l.append(el('span', null, now + ' this week, ' + h.target + ' from ' + shortDate(next)));
+      row.append(l);
+    }
     row.append(input('Reserves per week', h.reserves ?? 2, null, v => { h.reserves = v; }, [0, 7]));
     row.append(input('Minimum', h.min, 'wide', v => { h.min = v; }));
     row.append(input('Full', h.full, 'wide', v => { h.full = v; }));
@@ -767,7 +782,7 @@ function renderSettings(){
     dn.onclick = () => { habits.splice(i + 1, 0, habits.splice(i, 1)[0]); saveHabits(); render(); };
     const lrn = el('label', 'inline'), lb = el('input'); lb.type = 'checkbox'; lb.checked = isLearning(h);
     lb.addEventListener('change', () => { h.learning = lb.checked; saveHabits(); render(); });
-    lrn.append(lb, document.createTextNode('Learning (keeps the Learning streak going)'));
+    lrn.append(lb, document.createTextNode('Learning'));
     tools.append(act, lrn, up, dn);
     if (h.window) tools.append(el('span', 'why', 'Logged 9pm–3am only'));
     row.append(tools); box.append(row);
@@ -784,6 +799,15 @@ function renderSettings(){
     r.append(el('span', null, s.label + ' →'), sel); map.append(r);
   });
 }
+/* A new weekly target starts next Monday (see targetFor). A habit with nothing logged yet has no
+   past to protect, so it changes straight away. */
+function setTarget(h, v){
+  const thisMon = mondayOf(ymd(new Date())), next = addDays(thisMon, 7);
+  if (!entries.some(e => e.habitId === h.id)){ h.target = v; delete h.targets; return; }
+  const log = (Array.isArray(h.targets) && h.targets.length ? h.targets : [{from:'0000-01-01', target:h.target || 1}]).filter(x => x.from < next);
+  if (targetFor({targets:log}, thisMon) !== v) log.push({from:next, target:v});
+  h.targets = log; h.target = v;
+}
 $('settingsBtn').onclick = () => { const s = $('settings'); s.hidden = !s.hidden; $('settingsBtn').setAttribute('aria-expanded', String(!s.hidden)); };
 $('addHabit').onclick = () => {
   habits.push({id:mkId(), name:'New habit', cadence:'daily', target:1, min:'', full:'', reserves:2, active:true, learning:false, createdDay:ymd(new Date())});
@@ -796,7 +820,7 @@ $('exportBtn').onclick = () => {
   const nameOf = id => (habits.find(h => h.id === id) || {}).name || null, reviews = loadReviews();
   const data = {
     app:'habits', version:1, exportedAt:new Date().toISOString(), timezone:Intl.DateTimeFormat().resolvedOptions().timeZone,
-    notes:'habits = what is tracked: cadence daily or weekly; target = Full+Minimum entries needed per Mon-Sun week, each Reserve lowering it by 1 (floor 1); reserves = emergency skips allowed per week; active false = archived; learning = counts toward the Learning streak (consecutive days with a Full or Minimum on any Learning habit), while the Showed up streak counts every habit. entries = at most one per habit per day: kind full | min | reserve; reserve has a reason; late = why a past day was filled in afterwards (allowed up to 48h); source focusdesk = written automatically from a timed Focus Desk block, with focusedMin and blockId; day = local date the entry is for; time = when it was logged. mapping = Focus Desk subject -> habit id. reviews = one weekly review per ISO week (Mon-Sun, monday = its first day), answers keyed by question text; done = all three answered.',
+    notes:'habits = what is tracked: cadence daily or weekly; target = Full+Minimum entries needed per Mon-Sun week, each Reserve lowering it by 1 (floor 1); targets = target history, each {from: the Monday it starts, target}, so past weeks are judged by the target they had; reserves = emergency skips allowed per week; active false = archived; learning = counts toward the Learning streak (consecutive days with a Full or Minimum on any Learning habit), while the Showed up streak counts every habit. entries = at most one per habit per day: kind full | min | reserve; reserve has a reason; late = why a past day was filled in afterwards (allowed up to 48h); source focusdesk = written automatically from a timed Focus Desk block, with focusedMin and blockId; day = local date the entry is for; time = when it was logged. mapping = Focus Desk subject -> habit id. reviews = one weekly review per ISO week (Mon-Sun, monday = its first day), answers keyed by question text; done = all three answered.',
     habits:habits.map(h => Object.assign({}, h, {learning:isLearning(h)})), mapping:settings.mapping,
     entries:entries.map(e => Object.assign({}, e, {time:iso(e.at), habitName:nameOf(e.habitId)})),
     reviews:Object.values(reviews).sort((a, b) => a.week < b.week ? -1 : 1).map(r => ({

@@ -129,7 +129,9 @@ function render(){
   const rs = read('habits:reviews'), reviews = rs && rs.reviews ? rs.reviews : {};
   const entryFor = (id, day) => { let best = null; for (const e of entries) if (e.habitId === id && e.day === day && RANK[e.kind] && (!best || better(e, best))) best = e; return best; };
   // same as Habits' weekStatus: Full + Minimum this Mon–Sun, each Reserve lowering the target (floor 1)
-  const weekStatus = (h, day) => { const w = mondayOf(day), end = addDays(w, 6); let done = 0, res = 0; entries.forEach(e => { if (e.habitId === h.id && e.day >= w && e.day <= end) e.kind === 'reserve' ? res++ : RANK[e.kind] && done++; }); return {done, target:Math.max(1, (h.target || 1) - res)}; };
+  // same as Habits' targetFor: a changed target starts the next Monday
+  const targetFor = (h, monday) => { let t = null; for (const x of Array.isArray(h.targets) ? h.targets : []) if (x && x.from <= monday) t = x.target; return t == null ? (Array.isArray(h.targets) && h.targets.length ? h.targets[0].target : h.target) || 1 : t; };
+  const weekStatus = (h, day) => { const w = mondayOf(day), end = addDays(w, 6); let done = 0, res = 0; entries.forEach(e => { if (e.habitId === h.id && e.day >= w && e.day <= end) e.kind === 'reserve' ? res++ : RANK[e.kind] && done++; }); return {done, target:Math.max(1, targetFor(h, w) - res)}; };
 
   const dateText = d.toLocaleDateString([], {weekday:'long'}), dm = d.toLocaleDateString([], {day:'numeric', month:'long'});
   const h1 = $('date'); h1.textContent = dateText + ' '; h1.append(el('span', 'outline', dm));

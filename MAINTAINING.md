@@ -216,6 +216,12 @@ options are as easy as Full.
   habit. The choice is remembered per device in `habits:chart`.
 - **Edit habits** in its Settings panel (rename, reorder, archive, targets);
   archiving keeps the history.
+- **Changing a weekly target** starts the next Monday: the habit keeps a
+  `targets` history (`[{from: Monday, target}]`, read by `targetFor()`), so
+  past weeks are judged by the target they had and a raise never wipes a
+  streak. Settings shows "3 this week, 6 from Mon …" until then. A habit
+  with nothing logged changes straight away. Desk has a copy of
+  `targetFor()`.
 - **Weekly review** (header button, or `/habits/#review`): last week's
   numbers, read from `habits:entries` plus Focus Desk's `focusdesk:log` and
   `focusdesk:journal`, and three questions saved per ISO week in
