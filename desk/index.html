@@ -57,13 +57,6 @@ p{margin:0}
 .row .st{font-size:14px;white-space:nowrap}
 .row .st.none{color:var(--muted)}
 .row .sub{grid-column:1/-1;font-size:12px;color:var(--muted)}
-.plan .row .name{font-weight:400;overflow-wrap:anywhere}
-.plan .row .st{color:var(--muted);font-size:13px}
-.plan .row.now{border-left:3px solid var(--ink);padding-left:10px}
-.plan .row.now .name{font-weight:700}
-.plan .row.done .name{color:var(--muted)}
-.go .now-line{color:var(--ink);font-weight:700}
-.go li:hover .now-line,.go li:focus-within .now-line{color:var(--bg)}
 </style>
 </head>
 <body>
@@ -92,10 +85,9 @@ p{margin:0}
 
   <ul class="go" id="links"></ul>
 
-  <section class="sec plan" aria-labelledby="pH" id="planSec" hidden>
-    <h2 id="pH">Plan today</h2>
-    <ul class="rows" id="plan"></ul>
-    <p class="muted">Edit it in <a href="/focus/">Focus Desk</a> → Settings → Weekly plan.</p>
+  <section class="sec" aria-labelledby="tH" id="todaySec" hidden>
+    <h2 id="tH">Today</h2>
+    <ul class="rows" id="todayList"></ul>
   </section>
 
   <div class="grid">
@@ -133,24 +125,6 @@ const reviewWeekOf = d => d.getDay() === 0 ? mondayOf(ymd(d)) : addDays(mondayOf
 const reviewDone = r => !!r && ['q1', 'q2', 'q3'].every(q => typeof r[q] === 'string' && r[q].trim());
 const reviewDue = (d, reviews) => (d.getDay() === 0 || d.getDay() === 1) && !reviewDone((reviews || {})[isoWeekKey(reviewWeekOf(d))]);
 const KIND_LABEL = {full:'Full', min:'Minimum', reserve:'Reserve'};
-/* Weekly plan, copied from Focus Desk (planDay / planNow): settings.plan in focusdesk:settings. */
-const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
-const hhmmMins = t => { const m = /^(\d{1,2}):(\d{2})$/.exec(t || ''); return m ? +m[1] * 60 + +m[2] : null; };
-function planDay(plan, d){
-  const cells = (plan.days || {})[DAY_KEYS[d.getDay()]] || {};
-  return plan.slots.map(sl => ({slot:sl, text:String(cells[sl.id] || '').trim(), s:hhmmMins(sl.start), e:hhmmMins(sl.end)}))
-    .filter(x => x.text).sort((a, b) => (a.s ?? 1e4) - (b.s ?? 1e4));
-}
-function planNow(plan, d){
-  const m = d.getHours() * 60 + d.getMinutes(), list = planDay(plan, d);
-  const now = list.find(x => x.s != null && m >= x.s && m < (x.e ?? x.s + 60));
-  const next = list.find(x => x.s != null && x.s > m);
-  if (now) return {now, next};
-  if (next) return {next};
-  const later = list.find(x => x.s == null);
-  return later ? {later} : null;
-}
-const shortHm = t => t ? t.replace(/^0(\d)/, '$1') : '';
 
 function render(){
   const d = new Date(), today = ymd(d);
@@ -176,18 +150,11 @@ function render(){
   const last = blocks.length ? blocks[blocks.length - 1] : null;
   $('fdLast').textContent = last && last.end ? 'Last block: ' + (last.goal || 'no goal set') + ', ' + (last.focusedMin || 0) + ' min, ' + new Date(last.end).toLocaleDateString([], {weekday:'short', day:'numeric', month:'short'}) + '.' : 'No blocks saved in this browser yet.';
 
-  // Plan today
-  const plan = fdSettings.plan && Array.isArray(fdSettings.plan.slots) ? fdSettings.plan : {slots:[], days:{}};
-  const pd = planDay(plan, d), pn = planNow(plan, d), m = minsOf(d), pl = $('plan'); pl.textContent = '';
-  $('planSec').hidden = !pd.length;
-  pd.forEach(x => {
-    const li = el('li', 'row'), isNow = !!(pn && pn.now && pn.now.slot.id === x.slot.id);
-    if (isNow) li.classList.add('now'); else if (x.s != null && m >= (x.e ?? x.s + 60)) li.classList.add('done');
-    li.append(el('span', 'name', x.text), el('span', 'st', (isNow ? 'now · ' : '') + (x.slot.start ? shortHm(x.slot.start) + (x.slot.end ? '–' + shortHm(x.slot.end) : '') : x.slot.name)));
-    pl.append(li);
-  });
-  const planLine = !pn ? '' : pn.now ? 'Now: ' + pn.now.text + (pn.now.slot.end ? ', until ' + shortHm(pn.now.slot.end) : '')
-    : pn.next ? 'Next: ' + pn.next.text + ' at ' + shortHm(pn.next.slot.start) : 'Later: ' + pn.later.text;
+  // what's on today: Focus Desk's list for this weekday (settings.week)
+  const week = fdSettings.week && typeof fdSettings.week === 'object' ? fdSettings.week : {};
+  const items = week[['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'][d.getDay()]] || [], tl = $('todayList'); tl.textContent = '';
+  items.forEach(t => { const li = el('li', 'row'); li.append(el('span', 'name', t)); tl.append(li); });
+  $('todaySec').hidden = !items.length;
 
   // Habits today
   const ul = $('habits'); ul.textContent = '';
@@ -222,7 +189,6 @@ function render(){
     return li;
   };
   const fdSubs = [];
-  if (planLine) fdSubs.push(el('span', 'now-line', planLine));
   if (morning){
     fdSubs.push(el('span', 'eyebrow', 'Morning block. Resume note:'));
     fdSubs.push(el('span', 'note', resume || 'No resume note saved. Start with the smallest next step.'));
@@ -234,12 +200,11 @@ function render(){
 }
 
 render();
-// another tab logged something, the tab came back, or the clock moved on
+// another tab logged something, the tab came back, or the clock moved into or out of the morning
 window.addEventListener('storage', render);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
 let lastKey = '';
-// (the minute is in the key so the plan's "now" moves on time)
-setInterval(() => { const d = new Date(), k = ymd(d) + minsOf(d); if (k !== lastKey){ lastKey = k; render(); } }, 15000);
+setInterval(() => { const d = new Date(), k = ymd(d) + (minsOf(d) >= 300 && minsOf(d) < 540) + (d.getHours() < 3 || d.getHours() >= 21); if (k !== lastKey){ lastKey = k; render(); } }, 15000);
 })();
 </script>
 </body>
