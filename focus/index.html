@@ -205,6 +205,17 @@ body[data-phase="idle"] .rule .kw{color:var(--muted)}
 .subj-chip .x{padding:0 6px}
 .subj-add{display:flex;gap:8px;max-width:320px}
 .subj-add .field{flex:1;min-width:0}
+.plan-now{border-left:3px solid var(--ink);background:var(--panel);padding:10px 14px;display:flex;flex-direction:column;gap:2px}
+.plan-now .what{font-weight:700;font-size:17px;overflow-wrap:anywhere}
+.plan-now .why a{color:inherit}
+.plan-slots{display:flex;flex-direction:column;gap:8px}
+.plan-slots label{font-size:13px}
+.plan-times{display:flex;flex-direction:column;gap:6px}
+.plan-time{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(0,1fr) auto;gap:6px;align-items:center}
+.plan-time .field{min-width:0}
+@media (max-width:520px){.plan-time{grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto}.plan-time .field:first-child{grid-column:1/-1}.plan-time{padding-bottom:6px;border-bottom:1px solid var(--line)}}
+.plan-set details summary{cursor:pointer;font-size:13px;color:var(--muted)}
+.plan-set details[open] summary{margin-bottom:8px}
 .data-row{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:center;gap:10px;border-top:1px solid var(--line);padding-top:12px}
 .data-status{font-size:13px;color:var(--muted)}
 
@@ -295,6 +306,22 @@ body[data-phase="idle"] .rule .kw{color:var(--muted)}
         <button class="btn small" id="subjAdd" type="button">Add</button>
       </div>
     </div>
+    <div class="subj-set plan-set" id="planSet">
+      <span class="eyebrow">Weekly plan</span>
+      <p class="why">What each block is for, so you don't have to check. The current block shows above the timer, and its subject is picked for you when the text names one (e.g. "Build" matches "Deep build").</p>
+      <div class="tags" id="planDays" role="group" aria-label="Day to edit"></div>
+      <div class="plan-slots" id="planSlots"></div>
+      <details>
+        <summary>Edit blocks and times</summary>
+        <div class="plan-times" id="planTimes"></div>
+        <div style="margin-top:8px"><button class="btn small" id="planAddSlot" type="button">Add block</button></div>
+      </details>
+      <div class="row" style="gap:8px;flex-wrap:wrap;align-items:center">
+        <button class="btn small" id="planLink" type="button">Copy link to this plan</button>
+        <span class="data-status" id="planStatus" role="status"></span>
+      </div>
+      <p class="why">Each browser keeps its own copy. To put this plan on your phone, copy the link and open it there.</p>
+    </div>
     <p class="pip-note" id="pipNote">The floating mini timer needs Chrome or Edge. In other browsers, keep this tab in a small window pinned on top instead (on Windows, PowerToys "Always On Top": Win + Ctrl + T).</p>
     <div class="data-row">
       <span class="eyebrow">Your data</span>
@@ -330,6 +357,11 @@ body[data-phase="idle"] .rule .kw{color:var(--muted)}
           <div class="resume" id="resumeBox" hidden>
             <span class="eyebrow" id="resumeLabel">Pick up here</span>
             <p id="resumeText"></p>
+          </div>
+          <div class="plan-now" id="planNow" hidden>
+            <span class="eyebrow" id="planWhen"></span>
+            <span class="what" id="planWhat"></span>
+            <span class="why" id="planNext"></span>
           </div>
           <div>
             <label class="lbl" for="goal">This block I will…</label>
@@ -607,6 +639,45 @@ function seedSubjects(){
 const activeSubjects = () => (settings.subjects || []).filter(s => !s.archived);
 const subjectById = id => id && ((settings.subjects || []).find(s => s.id === id) || LEGACY_SUBJECTS.find(s => s.id === id)) || null;
 seedSubjects();
+
+/* ---------- weekly plan ----------
+   settings.plan = {slots:[{id, name, start:'05:30', end:'06:30'}], days:{mon:{slotId:text}, …}}.
+   A slot with no start time ("Later") is listed after the timed ones. Desk (/desk/) has a copy of
+   planDay/planNow, so change both together. */
+const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+const DAY_NAMES = {mon:'Mon', tue:'Tue', wed:'Wed', thu:'Thu', fri:'Fri', sat:'Sat', sun:'Sun'};
+const MAX_SLOTS = 6;
+const planOf = () => { const p = settings.plan; return p && Array.isArray(p.slots) ? p : {slots:[], days:{}}; };
+const hhmmMins = t => { const m = /^(\d{1,2}):(\d{2})$/.exec(t || ''); return m ? +m[1] * 60 + +m[2] : null; };
+// today's slots that have something written, timed ones in order of start, then untimed
+function planDay(plan, d){
+  const cells = (plan.days || {})[DAY_KEYS[d.getDay()]] || {};
+  return plan.slots.map(sl => ({slot:sl, text:String(cells[sl.id] || '').trim(), s:hhmmMins(sl.start), e:hhmmMins(sl.end)}))
+    .filter(x => x.text).sort((a, b) => (a.s ?? 1e4) - (b.s ?? 1e4));
+}
+// {now} while a slot runs, {next} before one starts, {later} once the timed ones are over, or null
+function planNow(plan, d){
+  const m = d.getHours() * 60 + d.getMinutes(), list = planDay(plan, d);
+  const now = list.find(x => x.s != null && m >= x.s && m < (x.e ?? x.s + 60));
+  const next = list.find(x => x.s != null && x.s > m);
+  if (now) return {now, next};
+  if (next) return {next};
+  const later = list.find(x => x.s == null);
+  return later ? {later} : null;
+}
+// the subject a plan line names: whole-word match at the start of a word, longest label wins
+function subjectFor(text){
+  const t = String(text || '').toLowerCase();
+  let best = null;
+  activeSubjects().forEach(s => {
+    const l = s.label.toLowerCase().trim(); if (!l) return;
+    const re = new RegExp('(^|[^a-z0-9])' + l.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    if (re.test(t) && (!best || l.length > best.label.length)) best = s;
+  });
+  return best;
+}
+const shortHm = t => t ? t.replace(/^0(\d)/, '$1') : '';
+const slotTimes = sl => sl.start ? shortHm(sl.start) + (sl.end ? '–' + shortHm(sl.end) : '') : '';
 const habitsGet = k => { try { const v = localStorage.getItem('habits:' + k); return v ? JSON.parse(v) : null; } catch (e) { return null; } };
 const habitsSet = (k, v) => { try { localStorage.setItem('habits:' + k, JSON.stringify(v)); } catch (e) {} };
 const ymd = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
@@ -771,7 +842,7 @@ function saveWrap(goBreak){
   logToHabits(saved);
   settings.resume = note ? {text:note, at:now()} : null; saveSettings();
   $('resumeNote').value = ''; $('goal').value = '';
-  T.lastBlockId = b.id; T.block = null; T.checks = {}; T.subject = null; // a leftover subject would log the wrong habit
+  T.lastBlockId = b.id; T.block = null; T.checks = {}; T.subject = null; T.planKey = null; // a leftover subject would log the wrong habit; the plan picks again
   if (goBreak){
     const n = todaysBlocks().filter(x => x.completed).length;
     const long = n > 0 && n % 4 === 0;
@@ -795,7 +866,7 @@ function tick(){
     return;
   }
   if (T.phase === 'focus' || T.phase === 'break') renderClock();
-  else if (T.phase === 'idle' && dayMode() !== lastMode) renderTimer();
+  else if (T.phase === 'idle' && dayMode() + planSig() !== lastMode) renderTimer();
 }
 setInterval(tick, 250);
 
@@ -911,14 +982,14 @@ function renderTimer(){
   if (p === 'idle'){
     document.title = IDLE_TITLE;
     const mode = dayMode(), r = settings.resume;
-    lastMode = mode;
+    lastMode = mode + planSig();
     $('resumeBox').hidden = !r; if (r) $('resumeText').textContent = r.text;
     $('resumeLabel').textContent = mode === 'morning' ? 'Morning block. Resume note:' : 'Pick up here';
     $('windBanner').hidden = mode !== 'wind';
     $('windBanner').textContent = 'Rest now. First block at ' + shortTime(settings.firstBlock || DEFAULTS.firstBlock) + '.';
     $('lenVal').textContent = settings.focusMin + ' min';
     $('startBtn').textContent = mode === 'wind' ? 'Start anyway (short block)' : 'Start ' + settings.focusMin + '-min block';
-    renderChecks(); renderNudge(); renderSubjects();
+    renderPlanNow(); renderChecks(); renderNudge(); renderSubjects();
   }
   if (p === 'focus' || p === 'break'){
     const isBreak = p === 'break';
@@ -946,13 +1017,96 @@ function renderTimer(){
   }
   renderPip();
 }
+function renderPlanNow(){
+  const p = planNow(planOf(), new Date()), box = $('planNow');
+  box.hidden = !p; if (!p) return;
+  const cur = p.now || p.next || p.later;
+  $('planWhen').textContent = p.now ? 'Now · ' + cur.slot.name + (cur.slot.end ? ', until ' + shortHm(cur.slot.end) : '')
+    : p.next ? 'Next · ' + cur.slot.name + ' at ' + shortHm(cur.slot.start) : cur.slot.name;
+  $('planWhat').textContent = cur.text;
+  $('planNext').textContent = p.now && p.next ? 'Then ' + p.next.text + ' at ' + shortHm(p.next.slot.start) : '';
+  $('planNext').hidden = !$('planNext').textContent;
+  // pick the subject when the slot changes. One the plan picked (or none) moves on with the plan; one
+  // picked by hand stays until the block is saved.
+  const key = ymd(new Date()) + '|' + cur.slot.id;
+  if (T.planKey !== key){
+    T.planKey = key;
+    if (!T.subject || T.subject === T.planAuto){ const sub = subjectFor(cur.text); T.subject = sub ? sub.id : null; T.planAuto = T.subject; }
+    saveTimer();
+  }
+}
+// changes when the plan moves to another slot, so a page left open on the idle screen follows it
+const planSig = () => { const p = planNow(planOf(), new Date()); return p ? (p.now ? 'n' : p.next ? 'x' : 'l') + (p.now || p.next || p.later).slot.id + (p.next ? p.next.slot.id : '') : ''; };
+let planDayKey = DAY_KEYS[new Date().getDay()];
+function renderPlanEditor(){
+  const plan = planOf();
+  const days = $('planDays'); days.textContent = '';
+  ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'].forEach(k => {
+    const b = el('button', 'tag', DAY_NAMES[k]); b.type = 'button'; b.setAttribute('aria-pressed', String(k === planDayKey));
+    b.onclick = () => { planDayKey = k; renderPlanEditor(); };
+    days.append(b);
+  });
+  const slots = $('planSlots'); slots.textContent = '';
+  if (!plan.slots.length) slots.append(el('p', 'why', 'No blocks yet. Open "Edit blocks and times" and add one, e.g. Block A, 5:30 to 6:30.'));
+  plan.slots.forEach(sl => {
+    const l = el('label', null, sl.name + (slotTimes(sl) ? ' · ' + slotTimes(sl) : '')), f = el('input', 'field');
+    f.maxLength = 80; f.autocomplete = 'off'; f.placeholder = 'Nothing planned';
+    f.value = ((plan.days || {})[planDayKey] || {})[sl.id] || '';
+    f.addEventListener('change', () => { setPlan(p => { p.days[planDayKey] = Object.assign({}, p.days[planDayKey], {[sl.id]:f.value.trim()}); }); });
+    l.append(f); slots.append(l);
+  });
+  const times = $('planTimes'); times.textContent = '';
+  plan.slots.forEach((sl, i) => {
+    const row = el('div', 'plan-time');
+    const name = el('input', 'field'); name.value = sl.name; name.maxLength = 20; name.setAttribute('aria-label', 'Block name');
+    const st = el('input', 'field'); st.type = 'time'; st.value = sl.start || ''; st.setAttribute('aria-label', sl.name + ' starts');
+    const en = el('input', 'field'); en.type = 'time'; en.value = sl.end || ''; en.setAttribute('aria-label', sl.name + ' ends');
+    const x = el('button', 'btn small', '×'); x.type = 'button'; x.setAttribute('aria-label', 'Remove ' + sl.name);
+    name.onchange = () => setPlan(p => { p.slots[i].name = name.value.trim() || sl.name; });
+    st.onchange = () => setPlan(p => { p.slots[i].start = st.value; });
+    en.onchange = () => setPlan(p => { p.slots[i].end = en.value; });
+    x.onclick = () => { if (confirm('Remove ' + sl.name + ' and what is planned in it every day?')) setPlan(p => { p.slots.splice(i, 1); Object.values(p.days).forEach(d => { delete d[sl.id]; }); }); };
+    row.append(name, st, en, x); times.append(row);
+  });
+  $('planAddSlot').disabled = plan.slots.length >= MAX_SLOTS;
+}
+function setPlan(change){
+  const p = JSON.parse(JSON.stringify(planOf())); p.days = p.days || {};
+  change(p); settings.plan = p; saveSettings();
+  renderPlanEditor(); if ((T.phase || 'idle') === 'idle') renderPlanNow(), renderSubjects();
+}
+$('planAddSlot').onclick = () => setPlan(p => {
+  const n = p.slots.length, last = p.slots[n - 1];
+  p.slots.push({id:'p-' + mkId(), name:'Block ' + String.fromCharCode(65 + n), start:last && last.end ? last.end : '', end:''});
+});
+// move a plan to another browser: the plan rides in the #fragment, which never reaches the server
+$('planLink').onclick = async () => {
+  const url = location.origin + '/focus/#plan=' + encodeURIComponent(JSON.stringify(planOf()));
+  try { await navigator.clipboard.writeText(url); $('planStatus').textContent = 'Link copied. Open it in the other browser.'; }
+  catch (e) { prompt('Copy this link:', url); }
+};
+function planFromHash(){
+  const m = /^#plan=(.+)$/.exec(location.hash); if (!m) return;
+  history.replaceState(null, '', location.pathname + location.search);
+  try {
+    const p = JSON.parse(decodeURIComponent(m[1]));
+    if (!p || !Array.isArray(p.slots) || typeof p.days !== 'object') throw new Error('bad plan');
+    const slots = p.slots.filter(x => x && typeof x.id === 'string').slice(0, MAX_SLOTS).map(x => ({id:x.id.slice(0, 40), name:String(x.name || 'Block').slice(0, 20), start:/^\d{2}:\d{2}$/.test(x.start) ? x.start : '', end:/^\d{2}:\d{2}$/.test(x.end) ? x.end : ''}));
+    const days = {};
+    Object.keys(DAY_NAMES).forEach(k => { const d = p.days[k] || {}; days[k] = {}; slots.forEach(sl => { if (typeof d[sl.id] === 'string') days[k][sl.id] = d[sl.id].slice(0, 80); }); });
+    if (planOf().slots.length && !confirm('Replace the weekly plan in this browser with the one in this link?')) return;
+    settings.plan = {slots, days}; saveSettings(); T.planKey = null; saveTimer();
+    renderPlanEditor(); renderAll();
+    $('planStatus').textContent = 'Plan added from the link.';
+  } catch (e) { alert("That plan link couldn't be read. Copy it again from the other browser."); }
+}
 function renderSubjects(){
   const list = activeSubjects(), box = $('subjects'); box.textContent = '';
   if (T.subject && !list.some(s => s.id === T.subject)) { T.subject = null; saveTimer(); } // removed in Settings
   $('subjectRow').hidden = !list.length; // no subjects yet: no row (add them in Settings)
   list.forEach(s => {
     const b = el('button', 'tag', s.label); b.type = 'button'; b.setAttribute('aria-pressed', T.subject === s.id ? 'true' : 'false');
-    b.onclick = () => { T.subject = T.subject === s.id ? null : s.id; saveTimer(); renderSubjects(); };
+    b.onclick = () => { T.subject = T.subject === s.id ? null : s.id; T.planAuto = undefined; saveTimer(); renderSubjects(); };
     box.appendChild(b);
   });
   // only mention Habits when a subject actually logs to one
@@ -1186,7 +1340,7 @@ function exportData(){
     app:'focus-desk', version:1, exportedAt:new Date().toISOString(),
     timezone:Intl.DateTimeFormat().resolvedOptions().timeZone,
     notes:'blocks = focus sessions (planned/focused minutes, completed = ran to the end, reps = exercises finished, subject = id of what it was for, see settings.subjects for its label; a block whose subject is linked to a habit also logs to Habits). journal = urges to switch, tagged with why; blockId links an urge to the block it happened in.',
-    settings:{focusMin:settings.focusMin, breakMin:settings.breakMin, longBreakMin:settings.longBreakMin, rules:settings.rules, subjects:settings.subjects || []},
+    settings:{focusMin:settings.focusMin, breakMin:settings.breakMin, longBreakMin:settings.longBreakMin, rules:settings.rules, subjects:settings.subjects || [], plan:planOf()},
     blocks:log.blocks.map(b => Object.assign({}, b, {startTime:iso(b.start), endTime:iso(b.end)})),
     journal:journal.entries.map(e => Object.assign({}, e, {time:iso(e.at), tagLabel:tagLabel(e.tag)})),
     raw:{settings, journal, log}
@@ -1219,7 +1373,9 @@ async function importData(file){
     const sub = mergeById(settings.subjects || [], raw.settings && raw.settings.subjects);
     settings.subjects = sub.merged; if (sub.added) settings.subjectsSet = true;
     seedSubjects();
-    saveJournal(); saveLog(); saveSettings(); renderAll(); renderSubjectEditor();
+    const ip = raw.settings && raw.settings.plan;
+    if (!planOf().slots.length && ip && Array.isArray(ip.slots)) settings.plan = ip; // only fills an empty plan, never overwrites
+    saveJournal(); saveLog(); saveSettings(); renderAll(); renderSubjectEditor(); renderPlanEditor();
     $('dataStatus').textContent = 'Imported ' + j.added + ' new entries and ' + b.added + ' new blocks. Existing data was kept.';
   } catch (e) {
     $('dataStatus').textContent = "That file couldn't be read as a Focus Desk export. Choose a file made with the Export button.";
@@ -1237,6 +1393,7 @@ $('importFile').addEventListener('change', async () => {
 $('startBtn').onclick = startFocus;
 $('goal').addEventListener('keydown', e => { if (e.key === 'Enter') startFocus(); });
 $('subjAdd').onclick = addSubject;
+renderPlanEditor(); planFromHash(); window.addEventListener('hashchange', planFromHash);
 $('subjNew').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addSubject(); } });
 renderSubjectEditor();
 $('goal').addEventListener('input', renderPip);

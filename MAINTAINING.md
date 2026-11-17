@@ -182,6 +182,15 @@ and colour tokens from `/styles.css`.
   until 04:00 the idle view says "Rest now" and caps a block at 25 min;
   05:00–09:00 it leads with the resume note. Labels only, nothing blocked.
 
+- **Weekly plan** (Settings → Weekly plan): blocks with times (`settings.plan.slots`)
+  and what each day's block is for (`settings.plan.days.mon` … `sun`, keyed by
+  slot id). The idle screen shows the current or next block; when its text names
+  a subject ("Building" → Build, word-start match, longest label wins) that
+  subject is picked. A subject the plan picked moves on with the plan; one
+  picked by hand stays until the block is saved. "Copy link to this plan" puts
+  the plan in the URL's `#plan=` fragment (never sent to the server) to move it
+  to another browser. `planDay`/`planNow` are copied into Desk.
+
 ## Habits (`habits/`)
 
 In the menu on your devices only (see Owner mode); `noindex` keeps it out
@@ -238,7 +247,8 @@ A read-only start page: today's date, Focus Desk blocks and minutes, each
 habit's status today, last night's Bedtime, and weekly "2 of 4" progress.
 Focus Desk is listed first 05:00–09:00 (with the resume note), Habits
 first otherwise; a "Weekly review due" link appears Sunday/Monday until
-the review is done. It only ever *reads* localStorage. Its date and
+the review is done. "Plan today" lists Focus Desk's weekly plan for today with the
+current block marked, and the Focus Desk link shows "Now: …". It only ever *reads* localStorage. Its date and
 entry rules are copied from the pure block in `habits/index.html`, so if
 you change those rules there, change them here too. `noindex`, and in
 the menu on your devices only (see Owner mode).
