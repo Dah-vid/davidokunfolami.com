@@ -175,12 +175,13 @@ and colour tokens from `/styles.css`.
   subject only archives it, so old blocks keep their label.
 - **Subjects → Habits**: a saved block whose subject is linked to a habit
   (Habits → Settings → Focus Desk subjects) writes into `habits:entries`:
-  25+ focused minutes = Full, 10+ = Minimum, less = nothing. See
+  the Schedule's Full threshold = Full, its Minimum threshold = Minimum, less
+  = nothing. See
   `logToHabits()`. Your four stay linked through `DEFAULT_SUBJECT_MAP`; new
   subjects log nothing until linked.
-- **Wind-down / morning**: from the wind-down time (Settings, default 21:30)
-  until 04:00 the idle view says "Rest now" and caps a block at 25 min;
-  05:00–09:00 it leads with the resume note. Labels only, nothing blocked.
+- **Wind-down / morning**: during wind-down (Habits' Schedule) the idle view
+  says "Rest now" and caps a block at the study minimum; in the morning it
+  leads with the resume note. Labels only, nothing blocked.
 
 - **Today list** (top of the idle screen): what's on for this weekday, a plain
   list with no times or order, stored as `settings.week` (`{mon:[…], …}`).
