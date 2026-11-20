@@ -110,6 +110,12 @@ a.btn{display:inline-block;text-decoration:none;color:inherit}
 .heat-legend{display:flex;align-items:center;flex-wrap:wrap;gap:3px;font-size:11px;color:var(--muted)}
 .heat-legend .gap{width:10px}
 
+/* Sleep: bedtime targets, morning log */
+.bed-targets{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.sleep-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.sleep-row label{font-size:12px;color:var(--muted);display:flex;flex-direction:column;gap:3px}
+.sleep-act{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+
 /* Settings */
 .hedit{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;padding:10px 0;border-bottom:1px solid var(--line)}
 .hedit label{font-size:12px;color:var(--muted);display:flex;flex-direction:column;gap:3px}
@@ -201,6 +207,11 @@ textarea.field{min-height:68px;resize:vertical;line-height:1.45}
   <section class="panel" id="settings" aria-labelledby="setH" hidden>
     <div class="sec-h"><h2 id="setH">Settings</h2><button class="btn small" id="addHabit" type="button">Add habit</button></div>
     <div id="editors"></div>
+    <div class="hedit">
+      <label>Bedtime target<input class="field" type="time" id="setBed"></label>
+      <label>Wake target<input class="field" type="time" id="setWake"></label>
+      <p class="why wide">Wake defaults to bedtime + 7h 45m. Focus Desk's wind-down starts 45 minutes before bedtime.</p>
+    </div>
     <div>
       <p class="lbl">Focus Desk subjects</p>
       <p class="why">A saved Focus Desk block with a subject logs the matching habit: 25+ min as Full, 10+ min as Minimum.</p>
@@ -223,6 +234,15 @@ textarea.field{min-height:68px;resize:vertical;line-height:1.45}
           <p>Missed yesterday. One missed day does not hurt. Two in a row does. Do the minimum today.</p>
           <p class="eyebrow" id="missNames"></p>
         </div>
+        <section class="panel" id="sleepLog" aria-labelledby="sleepLogH" hidden>
+          <p class="lbl" id="sleepLogH">Last night</p>
+          <div class="sleep-row">
+            <label>Lights off<input class="field" type="time" id="slOff"></label>
+            <label>Woke<input class="field" type="time" id="slWoke"></label>
+          </div>
+          <div class="sleep-act"><span class="eyebrow">Rested</span><div class="tags" id="slRest" role="group" aria-label="How rested, 1 to 5"></div></div>
+          <div class="sleep-act"><button class="btn small" id="slSave" type="button">Save</button><span class="row-note" id="slStatus" role="status"></span></div>
+        </section>
         <ul class="checklist" id="checklist"></ul>
         <p class="honesty">A Minimum counts. A Reserve counts. A fake Full doesn't help you.</p>
       </section>
@@ -243,6 +263,11 @@ textarea.field{min-height:68px;resize:vertical;line-height:1.45}
         <div class="stats" id="overall"></div>
         <p class="why">Learning: days with a Full or Minimum on a habit marked Learning. Showed up: the same for any habit. Choose which habits are Learning in Settings.</p>
         <ul class="streaks" id="streaks"></ul>
+      </section>
+
+      <section class="sec" aria-labelledby="sleepH">
+        <div class="sec-h"><h2 id="sleepH">Sleep</h2><span class="legend">From the morning log</span></div>
+        <div class="stats" id="sleepStats"></div>
       </section>
 
       <section class="sec" aria-labelledby="heatH">
@@ -428,6 +453,20 @@ function weekReview(habits, entries, blocks, journal, monday, todayDate){
       topTag:top(wj, e => e.tag), topSubject:top(inBlock, e => subjectOf.get(e.blockId))}
   };
 }
+/* Sleep log: nights = [{night:'YYYY-MM-DD' (the evening it started), off:'HH:MM', woke:'HH:MM', rested:1-5, hours}] */
+const hmMins = t => { const m = /^(\d{1,2}):(\d{2})$/.exec(t || ''); return m ? +m[1] * 60 + +m[2] : null; };
+// hours asleep: woke minus lights off (across midnight) minus 15 minutes to fall asleep
+const sleepHours = (off, woke) => {
+  const a = hmMins(off), b = hmMins(woke); if (a == null || b == null) return null;
+  return Math.round(Math.max(0, ((b - a) % 1440 + 1440) % 1440 - 15) / 60 * 100) / 100;
+};
+// need = average hours on nights rated 4-5, once there are 10 of them; week = average over the last 7 nights
+function sleepStats(nights, todayDate){
+  const ok = (nights || []).filter(n => n && typeof n.hours === 'number'), good = ok.filter(n => n.rested >= 4);
+  const avg = a => a.length ? a.reduce((x, n) => x + n.hours, 0) / a.length : null;
+  const week = ok.filter(n => n.night >= addDays(ymd(todayDate), -7));
+  return {goodCount:good.length, need:good.length >= 10 ? avg(good) : null, week:avg(week), weekCount:week.length};
+}
 /* streaks:end */
 
 /* ---------- state ---------- */
@@ -445,6 +484,48 @@ let habits = loadHabits(), settings = loadSettings(), entries = loadEntries();
 const saveHabits = () => set('habits', habits);
 const saveSettings = () => set('settings', settings);
 const saveEntries = () => set('entries', {entries});
+
+/* ---------- bedtime targets ----------
+   settings.sleep = {bedtime:'HH:MM', wake?:'HH:MM', moves:[{day, bedtime, wake}]}. Wake follows
+   bedtime + 7h 45m until it's set by hand. The Bedtime habit reads them: Full = lights off by the
+   target, Minimum = within 30 minutes after. Focus Desk starts its wind-down 45 minutes before. */
+const DEFAULT_BEDTIME = '23:15', WAKE_AFTER = 465;
+const m2hm = m => { m = ((m % 1440) + 1440) % 1440; return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); };
+const nice = hm => { const m = hmMins(hm), h = Math.floor(m / 60), mm = m % 60; return ((h + 11) % 12 + 1) + (mm ? ':' + String(mm).padStart(2, '0') : '') + (h < 12 ? 'am' : 'pm'); };
+function sleepT(){
+  const s = settings.sleep || {}, bed = hmMins(s.bedtime) != null ? s.bedtime : DEFAULT_BEDTIME;
+  return {bed, wake:hmMins(s.wake) != null ? s.wake : m2hm(hmMins(bed) + WAKE_AFTER), wakeSet:hmMins(s.wake) != null, moves:Array.isArray(s.moves) ? s.moves : []};
+}
+function syncBedtimeText(){
+  const h = habits.find(x => x.window); if (!h) return;
+  const t = sleepT(), full = 'Lights off by ' + nice(t.bed), min = 'Lights off by ' + nice(m2hm(hmMins(t.bed) + 30));
+  if (h.full !== full || h.min !== min){ h.full = full; h.min = min; saveHabits(); }
+}
+function setSleep(change){
+  settings = loadSettings();
+  const sl = Object.assign({}, settings.sleep); change(sl); settings.sleep = sl; saveSettings();
+  syncBedtimeText(); render();
+}
+function moveEarlier(){
+  setSleep(sl => {
+    const t = sleepT();
+    sl.bedtime = m2hm(hmMins(t.bed) - 30);
+    if (t.wakeSet) sl.wake = m2hm(hmMins(t.wake) - 30); // otherwise it follows the bedtime
+    sl.moves = t.moves.concat({day:ymd(new Date()), bedtime:sl.bedtime, wake:sl.wake || m2hm(hmMins(sl.bedtime) + WAKE_AFTER)});
+  });
+}
+syncBedtimeText();
+// one-off wording update for David's own Building and Textbook minimums (owner mode only)
+(function(){
+  let owner = false; try { owner = !!localStorage.getItem('site:owner'); } catch (e) {}
+  const done = Array.isArray(settings.updates) ? settings.updates : [];
+  if (!owner || done.includes('minimums-2026-11')) return;
+  const set1 = (id, text) => { const h = habits.find(x => x.id === id); if (h) h.min = text; };
+  set1('building', "Do the saved next task, or test / rebuild last session's code from memory");
+  set1('textbook', "Explain the last section from memory in Feynman's Duck, then check gaps");
+  saveHabits(); settings.updates = done.concat('minimums-2026-11'); saveSettings();
+})();
+const loadSleep = () => { const s = get('sleep'); return s && Array.isArray(s.nights) ? s.nights : []; };
 
 const entryFor = (habitId, day) => { let best = null; for (const e of entries) if (e.habitId === habitId && e.day === day && RANK[e.kind] && (!best || better(e, best))) best = e; return best; };
 // fed by a Focus Desk subject that actually exists, so Full has to come from a timed block
@@ -514,6 +595,13 @@ function habitRow(h, day, past){
     const mp = el('p'); mp.append(el('span', 'eyebrow', 'Minimum '), document.createTextNode(h.min || '—'));
     const fp = el('p', 'full-text'); fp.append(el('span', 'eyebrow', 'Full '), document.createTextNode(h.full || '—'));
     pr.append(mp, fp); li.append(pr);
+    if (h.window){
+      const t = sleepT(), last = t.moves[t.moves.length - 1], box = el('div', 'bed-targets');
+      box.append(el('p', 'row-note', 'Target: lights off ' + nice(t.bed) + ' · wake ' + nice(t.wake)));
+      const mv = el('button', 'btn small', 'Move 30 min earlier'); mv.type = 'button'; mv.onclick = moveEarlier;
+      box.append(mv, el('p', 'why', 'Move again after 2 nights you hit Full.' + (last ? ' Last moved ' + shortDate(last.day) + '.' : '')));
+      li.append(box);
+    }
   }
 
   const ch = el('div', 'choices');
@@ -742,6 +830,9 @@ $('reviewBtn').onclick = () => openReview($('review').hidden);
 
 /* ---------- settings ---------- */
 function renderSettings(){
+  const t = sleepT();
+  if (document.activeElement !== $('setBed')) $('setBed').value = t.bed;
+  if (document.activeElement !== $('setWake')) $('setWake').value = t.wake;
   const box = $('editors'); box.textContent = '';
   habits.forEach((h, i) => {
     const row = el('div', 'hedit');
@@ -808,6 +899,8 @@ function setTarget(h, v){
   if (targetFor({targets:log}, thisMon) !== v) log.push({from:next, target:v});
   h.targets = log; h.target = v;
 }
+$('setBed').addEventListener('change', () => { const v = $('setBed').value; if (v) setSleep(sl => { sl.bedtime = v; }); });
+$('setWake').addEventListener('change', () => { const v = $('setWake').value; setSleep(sl => { if (v) sl.wake = v; else delete sl.wake; }); });
 $('settingsBtn').onclick = () => { const s = $('settings'); s.hidden = !s.hidden; $('settingsBtn').setAttribute('aria-expanded', String(!s.hidden)); };
 $('addHabit').onclick = () => {
   habits.push({id:mkId(), name:'New habit', cadence:'daily', target:1, min:'', full:'', reserves:2, active:true, learning:false, createdDay:ymd(new Date())});
@@ -820,14 +913,15 @@ $('exportBtn').onclick = () => {
   const nameOf = id => (habits.find(h => h.id === id) || {}).name || null, reviews = loadReviews();
   const data = {
     app:'habits', version:1, exportedAt:new Date().toISOString(), timezone:Intl.DateTimeFormat().resolvedOptions().timeZone,
-    notes:'habits = what is tracked: cadence daily or weekly; target = Full+Minimum entries needed per Mon-Sun week, each Reserve lowering it by 1 (floor 1); targets = target history, each {from: the Monday it starts, target}, so past weeks are judged by the target they had; reserves = emergency skips allowed per week; active false = archived; learning = counts toward the Learning streak (consecutive days with a Full or Minimum on any Learning habit), while the Showed up streak counts every habit. entries = at most one per habit per day: kind full | min | reserve; reserve has a reason; late = why a past day was filled in afterwards (allowed up to 48h); source focusdesk = written automatically from a timed Focus Desk block, with focusedMin and blockId; day = local date the entry is for; time = when it was logged. mapping = Focus Desk subject -> habit id. reviews = one weekly review per ISO week (Mon-Sun, monday = its first day), answers keyed by question text; done = all three answered.',
+    notes:'habits = what is tracked: cadence daily or weekly; target = Full+Minimum entries needed per Mon-Sun week, each Reserve lowering it by 1 (floor 1); targets = target history, each {from: the Monday it starts, target}, so past weeks are judged by the target they had; reserves = emergency skips allowed per week; active false = archived; learning = counts toward the Learning streak (consecutive days with a Full or Minimum on any Learning habit), while the Showed up streak counts every habit. entries = at most one per habit per day: kind full | min | reserve; reserve has a reason; late = why a past day was filled in afterwards (allowed up to 48h); source focusdesk = written automatically from a timed Focus Desk block, with focusedMin and blockId; day = local date the entry is for; time = when it was logged. mapping = Focus Desk subject -> habit id. reviews = one weekly review per ISO week (Mon-Sun, monday = its first day), answers keyed by question text; done = all three answered. sleep.nights = the morning sleep log, one per night: night = the date of the evening it started, off = lights off, woke = wake time, rested = 1-5, hours = woke minus off minus 15 min to fall asleep. sleep.targets = bedtime and wake targets (Bedtime Full = lights off by the bedtime target, Minimum = within 30 min after it); moves = each Move 30 min earlier, with its date.',
     habits:habits.map(h => Object.assign({}, h, {learning:isLearning(h)})), mapping:settings.mapping,
     entries:entries.map(e => Object.assign({}, e, {time:iso(e.at), habitName:nameOf(e.habitId)})),
     reviews:Object.values(reviews).sort((a, b) => a.week < b.week ? -1 : 1).map(r => ({
       week:r.week, monday:r.monday, sunday:r.monday ? addDays(r.monday, 6) : null, done:reviewDone(r), updated:iso(r.updatedAt),
       answers:{[REVIEW_QS.q1]:r.q1 || '', [REVIEW_QS.q2]:r.q2 || '', [REVIEW_QS.q3]:r.q3 || ''}
     })),
-    raw:{habits, settings, entries:{entries}, reviews:{reviews}}
+    sleep:{targets:(({bed, wake, moves}) => ({bedtime:bed, wake, moves}))(sleepT()), nights:loadSleep()},
+    raw:{habits, settings, entries:{entries}, reviews:{reviews}, sleep:{nights:loadSleep()}}
   };
   const d = new Date(), pad = n => String(n).padStart(2, '0');
   const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], {type:'application/json'}));
@@ -855,6 +949,10 @@ $('importFile').addEventListener('change', async () => {
     const reviews = loadReviews(), inRev = data.raw.reviews && data.raw.reviews.reviews;
     let rAdded = 0;
     if (inRev && typeof inRev === 'object') Object.entries(inRev).forEach(([k, r]) => { if (/^\d{4}-W\d{2}$/.test(k) && r && typeof r === 'object' && !reviews[k]){ reviews[k] = r; rAdded++; } });
+    // sleep: add nights that aren't here yet
+    const have = loadSleep(), haveN = new Set(have.map(n => n.night)), inS = data.raw.sleep && Array.isArray(data.raw.sleep.nights) ? data.raw.sleep.nights : [];
+    const sAdd = inS.filter(n => n && typeof n.night === 'string' && !haveN.has(n.night) && haveN.add(n.night));
+    if (sAdd.length) set('sleep', {nights:have.concat(sAdd).sort((a, b) => a.night < b.night ? -1 : 1)});
     saveHabits(); saveEntries(); if (rAdded) set('reviews', {reviews}); render();
     $('dataStatus').textContent = 'Imported ' + e.added + ' new entries, ' + h.added + ' new habits and ' + plural(rAdded, 'review') + '. Existing data was kept.';
   } catch (err) {
@@ -863,7 +961,46 @@ $('importFile').addEventListener('change', async () => {
 });
 
 /* ---------- boot ---------- */
-function render(){ renderToday(); renderPast(); renderStreaks(); renderReview(); renderSettings(); }
+/* ---------- sleep log ----------
+   04:00–12:00: one entry per night in habits:sleep ({nights:[…]}), re-read before each write. */
+let slRest = null;
+const lastNight = () => addDays(ymd(new Date()), -1);
+function renderSleep(){
+  const hr = new Date().getHours(), card = $('sleepLog'), night = lastNight();
+  card.hidden = !(hr >= 4 && hr < 12);
+  const nights = loadSleep(), mine = nights.find(n => n.night === night);
+  if (!card.hidden && card.dataset.night !== night){
+    card.dataset.night = night;
+    const bed = habits.find(x => x.window), e = bed && entryFor(bed.id, night);
+    const at = e && !mine ? new Date(e.at) : null;
+    $('slOff').value = mine ? mine.off : at ? m2hm(at.getHours() * 60 + at.getMinutes()) : '';
+    $('slWoke').value = mine ? mine.woke : '';
+    slRest = mine ? mine.rested : null;
+    $('slStatus').textContent = mine ? 'Saved: ' + mine.hours + ' h asleep.' : '';
+  }
+  const tags = $('slRest'); tags.textContent = '';
+  [1, 2, 3, 4, 5].forEach(n => {
+    const b = el('button', 'tag', String(n)); b.type = 'button'; b.setAttribute('aria-pressed', String(slRest === n));
+    b.onclick = () => { slRest = n; renderSleep(); };
+    tags.append(b);
+  });
+  const st = sleepStats(nights, new Date()), box = $('sleepStats'); box.textContent = '';
+  const stat = (v, l) => { const d = el('div', 'stat'); d.append(el('b', null, v), el('span', null, l)); box.append(d); };
+  stat(st.need != null ? st.need.toFixed(1) + ' h' : '–', st.need != null ? 'Your sleep need (estimate), from ' + st.goodCount + ' nights rated 4-5' : 'Need 10 nights rated 4-5 to estimate (' + st.goodCount + ' so far)');
+  stat(st.week != null ? st.week.toFixed(1) + ' h' : '–', 'Average, last 7 nights' + (st.weekCount ? ' (' + st.weekCount + ' logged)' : ''));
+}
+$('slSave').onclick = () => {
+  const off = $('slOff').value, woke = $('slWoke').value, night = lastNight();
+  if (!off || !woke || !slRest){ $('slStatus').textContent = 'Fill in lights off, woke and rested first.'; return; }
+  const hours = sleepHours(off, woke), nights = loadSleep().filter(n => n.night !== night);
+  nights.push({id:'n-' + night, night, off, woke, rested:slRest, hours, at:now()});
+  nights.sort((a, b) => a.night < b.night ? -1 : 1);
+  set('sleep', {nights});
+  $('slStatus').textContent = 'Saved: ' + hours + ' h asleep.';
+  renderSleep();
+};
+
+function render(){ renderToday(); renderPast(); renderStreaks(); renderSleep(); renderReview(); renderSettings(); }
 render();
 // /desk/ links to /habits/#review
 const fromHash = () => { if (location.hash === '#review'){ openReview(true); $('review').scrollIntoView({block:'start'}); } };
@@ -874,7 +1011,7 @@ window.addEventListener('storage', ev => {
   else if (ev.key.startsWith('focusdesk:')) { renderReview(); renderSettings(); } // blocks, or subjects edited in Focus Desk
 });
 // re-render when the day rolls over or Bedtime's window opens/closes, so a page left open stays honest
-const clockKey = () => ymd(new Date()) + habits.filter(h => h.window).map(h => inWindow(h.window, new Date())).join();
+const clockKey = () => ymd(new Date()) + (new Date().getHours() >= 4 && new Date().getHours() < 12) + habits.filter(h => h.window).map(h => inWindow(h.window, new Date())).join();
 let lastClock = clockKey();
 setInterval(() => { const k = clockKey(); if (k !== lastClock) { lastClock = k; render(); } }, 15000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { entries = loadEntries(); render(); } });

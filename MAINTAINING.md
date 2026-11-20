@@ -188,6 +188,19 @@ and colour tokens from `/styles.css`.
   A `#week=` link (URL-encoded JSON of that object) fills it in another
   browser; the fragment never reaches the server.
 
+- **Build's next task**: the wrap-up of a Build block asks for the next
+  15-min task, saved as `settings.nextTask.build = {text, at}` and shown above
+  the goal ("Next task", with "Use as goal") while Build is selected.
+- **Evening minimum** (owner mode only): 18:00 until wind-down with no block
+  saved today, a card offers job search then one 15-min block. It preselects
+  the study subject (NeetCode, Build, Textbook) furthest behind its weekly
+  target in Habits and sets `T.lenOnce = 15` for that block alone; the
+  stepper changes that instead of the saved default while it's set.
+- **Wind-down and morning follow Habits**: wind-down starts 45 min before
+  Habits' bedtime target and the morning starts at its wake target
+  (`habitsSleep()`). Without a Bedtime habit in this browser it falls back to
+  Focus Desk's own wind-down setting and 05:00.
+
 ## Habits (`habits/`)
 
 In the menu on your devices only (see Owner mode); `noindex` keeps it out
@@ -210,6 +223,18 @@ options are as easy as Full.
   lock 48 hours after they end; Reserves are capped per habit per week;
   Bedtime logs only 9pm–3am (and 1am still counts as the night before);
   habits fed by Focus Desk can't be marked Full by hand.
+- **Bedtime targets**: `habits:settings.sleep = {bedtime, wake?, moves}`
+  (default 23:15; wake = bedtime + 7h 45m until set by hand), edited in
+  Settings. The Bedtime habit's Full/Minimum text is rewritten from them
+  (`syncBedtimeText()`): Full = lights off by the target, Minimum = within 30
+  minutes after. "Move 30 min earlier" on its card shifts both and records
+  the day in `moves`.
+- **Sleep log**: 04:00–12:00 a "Last night" card saves one entry per night in
+  `habits:sleep` (`{nights:[{night, off, woke, rested, hours}]}`), hours =
+  woke − lights off − 15 min. The Sleep section shows the need estimate
+  (average of nights rated 4–5, from 10 of them) and the last-7-nights
+  average; the maths is `sleepHours()` / `sleepStats()` in the pure block.
+  Both are in the export.
 - **Streak maths** is `computeStreaks()`, pure, between the `streaks:begin`
   / `streaks:end` markers so it can be run in node.
 - **Two overall streaks**: *Learning* (consecutive days with a Full or
