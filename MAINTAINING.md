@@ -191,15 +191,20 @@ and colour tokens from `/styles.css`.
 - **Build's next task**: the wrap-up of a Build block asks for the next
   15-min task, saved as `settings.nextTask.build = {text, at}` and shown above
   the goal ("Next task", with "Use as goal") while Build is selected.
-- **Evening minimum** (owner mode only): 18:00 until wind-down with no block
-  saved today, a card offers job search then one 15-min block. It preselects
-  the study subject (NeetCode, Build, Textbook) furthest behind its weekly
-  target in Habits and sets `T.lenOnce = 15` for that block alone; the
-  stepper changes that instead of the saved default while it's set.
-- **Wind-down and morning follow Habits**: wind-down starts 45 min before
-  Habits' bedtime target and the morning starts at its wake target
-  (`habitsSleep()`). Without a Bedtime habit in this browser it falls back to
-  Focus Desk's own wind-down setting and 05:00.
+- **Schedule-driven cards** (owner mode only, all times from Habits' Schedule):
+  the *evening minimum* card (that day's evening start until wind-down, no
+  block saved today; preselects the study subject furthest behind its weekly
+  target and makes that block the study minimum; "Not tonight" hides it for
+  the day and opens `/habits/#reserve=<habitId>&reason=Evening%20plans`,
+  "Full block instead" restores the normal length), the *short morning* card
+  (opened later than wake target + grace and before the day's cutoff: one
+  block of min(normal length, minutes left − 5) in 5-min steps, or "Not
+  enough time" below the Minimum threshold), and the *job search* line
+  (evening start to wind-down while the habit named Job search has no entry
+  today).
+- **Wind-down and morning**: wind-down runs from bedtime − lead to the wake
+  target, the morning from the wake target to the day's cutoff. Full/Minimum
+  auto-logging uses the Schedule's thresholds.
 
 ## Habits (`habits/`)
 
@@ -223,13 +228,22 @@ options are as easy as Full.
   lock 48 hours after they end; Reserves are capped per habit per week;
   Bedtime logs only 9pm–3am (and 1am still counts as the night before);
   habits fed by Focus Desk can't be marked Full by hand.
-- **Bedtime targets**: `habits:settings.sleep = {bedtime, wake?, moves}`
-  (default 23:15; wake = bedtime + 7h 45m until set by hand), edited in
-  Settings. The Bedtime habit's Full/Minimum text is rewritten from them
-  (`syncBedtimeText()`): Full = lights off by the target, Minimum = within 30
-  minutes after. "Move 30 min earlier" on its card shifts both and records
-  the day in `moves`.
-- **Sleep log**: 04:00–12:00 a "Last night" card saves one entry per night in
+- **Schedule** (Settings → Schedule): every time and length Habits, Focus
+  Desk and Desk use. Stored in `habits:settings` (`sleep.bedtime`,
+  `sleep.moves`, `schedule.*`: sleep need, per-weekday morning cutoff and
+  evening start, wind-down lead, short-morning grace, job search and study
+  minimums, Full and Minimum thresholds). `scheduleOf()` (between the
+  `schedule:begin` / `schedule:end` markers) fills in defaults and derives
+  the wake target (bedtime + need), wind-down, and the sleep card window
+  (1h before wake to cutoff + 3h). The same block is copied into
+  `focus/index.html` and `desk/index.html`: keep all three identical.
+- **Bedtime habit** follows the Schedule (`syncBedtime()`): Full = lights off
+  by the target, Minimum = within `BEDTIME_MARGIN` after, loggable from the
+  day's evening start until the sleep card opens. "Move 30 min earlier"
+  shifts the bedtime (the wake target follows) and records the day.
+- **Reserve deep link**: `/habits/#reserve=<habitId>&reason=<text>` opens
+  that habit's Reserve picker with the reason filled in and highlights it.
+- **Sleep log**: during the sleep card window a "Last night" card saves one entry per night in
   `habits:sleep` (`{nights:[{night, off, woke, rested, hours}]}`), hours =
   woke − lights off − 15 min. The Sleep section shows the need estimate
   (average of nights rated 4–5, from 10 of them) and the last-7-nights

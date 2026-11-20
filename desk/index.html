@@ -125,6 +125,38 @@ const reviewWeekOf = d => d.getDay() === 0 ? mondayOf(ymd(d)) : addDays(mondayOf
 const reviewDone = r => !!r && ['q1', 'q2', 'q3'].every(q => typeof r[q] === 'string' && r[q].trim());
 const reviewDue = (d, reviews) => (d.getDay() === 0 || d.getDay() === 1) && !reviewDone((reviews || {})[isoWeekKey(reviewWeekOf(d))]);
 const KIND_LABEL = {full:'Full', min:'Minimum', reserve:'Reserve'};
+/* schedule:begin — the Schedule (Habits → Settings → Schedule), shared by Habits, Focus Desk and Desk.
+   Every clock time and length in a card or rule comes from here. Stored in habits:settings
+   (sleep.bedtime, schedule.*); anything that follows from them is derived below. The three copies
+   (habits/, focus/, desk/) must stay identical. */
+const SCHEDULE_DEFAULTS = {bedtime:'23:15', needMin:465,
+  cutoff:{mon:'08:30', tue:'08:30', wed:'08:30', thu:'08:30', fri:'08:30', sat:'09:00', sun:'08:30'},
+  evening:{mon:'19:45', tue:'19:45', wed:'19:45', thu:'19:45', fri:'19:45', sat:'18:00', sun:'18:00'},
+  windLead:45, grace:30, jobMin:10, studyMin:15, fullMin:25, minMin:10};
+const SCHED_DAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+const toMin = t => { const m = /^(\d{1,2}):(\d{2})$/.exec(t || ''); return m && +m[1] < 24 && +m[2] < 60 ? +m[1] * 60 + +m[2] : null; };
+const toHM = m => { m = ((Math.round(m) % 1440) + 1440) % 1440; return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); };
+const niceTime = m => { m = ((Math.round(m) % 1440) + 1440) % 1440; const h = Math.floor(m / 60), mm = m % 60; return ((h + 11) % 12 + 1) + (mm ? ':' + String(mm).padStart(2, '0') : '') + (h < 12 ? 'am' : 'pm'); };
+// is minute-of-day m inside [a, b), wrapping past midnight
+const inSpan = (m, a, b) => a <= b ? m >= a && m < b : m >= a || m < b;
+function scheduleOf(hs){
+  const D = SCHEDULE_DEFAULTS, sl = (hs && hs.sleep) || {}, sc = (hs && hs.schedule) || {};
+  const num = (v, d, lo, hi) => typeof v === 'number' && isFinite(v) ? Math.min(hi, Math.max(lo, Math.round(v))) : d;
+  const tm = (v, d) => toMin(v) != null ? v : d;
+  const cutoff = {}, evening = {};
+  Object.keys(D.cutoff).forEach(k => { cutoff[k] = tm((sc.cutoff || {})[k], D.cutoff[k]); evening[k] = tm((sc.evening || {})[k], D.evening[k]); });
+  const bedtime = tm(sl.bedtime, D.bedtime), needMin = num(sc.needMin, D.needMin, 240, 720), windLead = num(sc.windLead, D.windLead, 0, 240);
+  const bed = toMin(bedtime), wake = (bed + needMin) % 1440, wind = (bed - windLead + 1440) % 1440;
+  const cutoffOn = d => toMin(cutoff[SCHED_DAYS[d.getDay()]]);
+  return {bedtime, needMin, cutoff, evening, windLead,
+    grace:num(sc.grace, D.grace, 0, 240), jobMin:num(sc.jobMin, D.jobMin, 1, 120), studyMin:num(sc.studyMin, D.studyMin, 5, 120),
+    fullMin:num(sc.fullMin, D.fullMin, 1, 240), minMin:num(sc.minMin, D.minMin, 1, 240),
+    // derived, as minutes after midnight
+    bed, wake, wind, cutoffOn, eveningOn:d => toMin(evening[SCHED_DAYS[d.getDay()]]),
+    cardStart:(wake - 60 + 1440) % 1440, cardEndOn:d => (cutoffOn(d) + 180) % 1440}; // sleep card: 1h before wake to cutoff + 3h
+}
+/* schedule:end */
+
 
 function render(){
   const d = new Date(), today = ymd(d);
@@ -165,7 +197,7 @@ function render(){
     li.append(el('span', 'name', h.name), el('span', 'st' + (e ? '' : ' none'), e ? KIND_LABEL[e.kind] + (e.kind === 'reserve' && e.reason ? ' · ' + e.reason : '') : 'not yet'));
     const sub = [];
     if (h.cadence === 'weekly'){ const w = weekStatus(h, habitToday(h, d)); sub.push(w.done + ' of ' + w.target + ' this week'); }
-    else if (h.window) sub.push('tonight, 9pm–3am');
+    else if (h.window) sub.push('tonight, ' + niceTime(h.window[0]) + '–' + niceTime(h.window[1]));
     if (e && e.source === 'focusdesk') sub.push('from Focus Desk');
     if (sub.length) li.append(el('span', 'sub', sub.join(' · ')));
     ul.append(li);
@@ -180,8 +212,8 @@ function render(){
       (e ? KIND_LABEL[e.kind] + (e.kind === 'full' && bed.full ? ', ' + bed.full.toLowerCase() : e.kind === 'min' && bed.min ? ', ' + bed.min.toLowerCase() : e.reason ? ', ' + e.reason : '') : 'nothing logged') + '.';
   } else $('bedLast').textContent = '';
 
-  // the two big links: Focus Desk first 05:00–09:00, with the resume note under it
-  const morning = minsOf(d) >= 300 && minsOf(d) < 540, resume = fdSettings.resume && fdSettings.resume.text;
+  // the two big links: Focus Desk first from the wake target to the morning cutoff (Habits' Schedule), with the resume note under it
+  const S = scheduleOf(read('habits:settings')), morning = inSpan(minsOf(d), S.wake, S.cutoffOn(d)), resume = fdSettings.resume && fdSettings.resume.text;
   const link = (href, title, subs) => {
     const li = el('li'), a = el('a', null, title), s = el('div', 'sub'); a.href = href;
     subs.forEach(x => s.append(x));
@@ -204,7 +236,7 @@ render();
 window.addEventListener('storage', render);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
 let lastKey = '';
-setInterval(() => { const d = new Date(), k = ymd(d) + (minsOf(d) >= 300 && minsOf(d) < 540) + (d.getHours() < 3 || d.getHours() >= 21); if (k !== lastKey){ lastKey = k; render(); } }, 15000);
+setInterval(() => { const d = new Date(), k = ymd(d) + minsOf(d); if (k !== lastKey){ lastKey = k; render(); } }, 15000);
 })();
 </script>
 </body>

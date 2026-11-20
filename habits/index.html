@@ -115,6 +115,17 @@ a.btn{display:inline-block;text-decoration:none;color:inherit}
 .sleep-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .sleep-row label{font-size:12px;color:var(--muted);display:flex;flex-direction:column;gap:3px}
 .sleep-act{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.habit.flash{box-shadow:inset 3px 0 0 var(--ink);background:var(--panel);padding-left:12px}
+@media (prefers-reduced-motion:no-preference){.habit{transition:background 300ms ease-out,padding 300ms ease-out}}
+.reasons .field{max-width:260px;padding:5px 8px;font-size:13px}
+.sched{display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--line);padding-top:12px}
+.sched-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px 14px}
+.sched-grid label{font-size:13px;font-weight:700;display:flex;flex-direction:column;gap:3px}
+.sched-grid .why{font-weight:400;font-size:12px}
+.sched-days{display:grid;grid-template-columns:auto minmax(0,1fr) minmax(0,1fr);gap:6px 10px;align-items:center;font-size:13px;max-width:460px}
+.sched-days .h{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.sched-derived{list-style:none;margin:0;padding:0;font-size:13px;display:flex;flex-direction:column;gap:3px}
+.sched-derived b{font-variant-numeric:tabular-nums}
 
 /* Settings */
 .hedit{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;padding:10px 0;border-bottom:1px solid var(--line)}
@@ -207,14 +218,22 @@ textarea.field{min-height:68px;resize:vertical;line-height:1.45}
   <section class="panel" id="settings" aria-labelledby="setH" hidden>
     <div class="sec-h"><h2 id="setH">Settings</h2><button class="btn small" id="addHabit" type="button">Add habit</button></div>
     <div id="editors"></div>
-    <div class="hedit">
-      <label>Bedtime target<input class="field" type="time" id="setBed"></label>
-      <label>Wake target<input class="field" type="time" id="setWake"></label>
-      <p class="why wide">Wake defaults to bedtime + 7h 45m. Focus Desk's wind-down starts 45 minutes before bedtime.</p>
-    </div>
+    <section class="sched" aria-labelledby="schedH">
+      <p class="lbl" id="schedH">Schedule</p>
+      <p class="why">Every time and length Habits and Focus Desk use. Change one here and both apps follow.</p>
+      <div class="sched-grid" id="schedFields"></div>
+      <div>
+        <p class="why">Morning cutoff: when study has to stop. Evening start: when you're home, fed and able to work.</p>
+        <div class="sched-days" id="schedDays"></div>
+      </div>
+      <div>
+        <p class="eyebrow">Worked out from the above</p>
+        <ul class="sched-derived" id="schedDerived"></ul>
+      </div>
+    </section>
     <div>
       <p class="lbl">Focus Desk subjects</p>
-      <p class="why">A saved Focus Desk block with a subject logs the matching habit: 25+ min as Full, 10+ min as Minimum.</p>
+      <p class="why" id="mapWhy"></p>
     </div>
     <div id="mapping" class="col" style="gap:6px"></div>
     <div class="data-row">
@@ -253,7 +272,7 @@ textarea.field{min-height:68px;resize:vertical;line-height:1.45}
         <label class="lbl" for="lateReason">What happened? <span class="why">Required before you can log a past day.</span></label>
         <input class="field" id="lateReason" maxlength="140" autocomplete="off" placeholder="e.g. Did it on the train, forgot to log">
         <ul class="checklist" id="pastList"></ul>
-        <p class="why">Older days are locked. Bedtime is only logged on the night itself, between 9pm and 3am.</p>
+        <p class="why" id="pastWhy">Older days are locked.</p>
       </section>
     </div>
 
@@ -317,9 +336,41 @@ const SEED = [
   {id:'sysdesign', name:'System design', cadence:'weekly', target:1, min:'One section, then explain it from memory', full:'Full session'},
   {id:'textbook', name:'Reading', cadence:'weekly', target:2, min:'One section, then explain it from memory', full:'Full session'},
   {id:'exercise', name:'Exercise', cadence:'weekly', target:3, min:'A 20-minute walk', full:'Full workout'},
-  // window: minutes after midnight it can be logged, [21:00, 03:00). Logged on the night, never next morning.
-  {id:'bedtime', name:'Bedtime', cadence:'daily', target:1, min:'Lights off by 11pm', full:'Lights off by 10:30pm', window:[1260, 180]}
+  // window = minutes after midnight it can be logged, filled in from the Schedule by syncBedtime()
+  {id:'bedtime', name:'Bedtime', cadence:'daily', target:1, min:'', full:'', window:[0, 0]}
 ];
+
+/* schedule:begin — the Schedule (Habits → Settings → Schedule), shared by Habits, Focus Desk and Desk.
+   Every clock time and length in a card or rule comes from here. Stored in habits:settings
+   (sleep.bedtime, schedule.*); anything that follows from them is derived below. The three copies
+   (habits/, focus/, desk/) must stay identical. */
+const SCHEDULE_DEFAULTS = {bedtime:'23:15', needMin:465,
+  cutoff:{mon:'08:30', tue:'08:30', wed:'08:30', thu:'08:30', fri:'08:30', sat:'09:00', sun:'08:30'},
+  evening:{mon:'19:45', tue:'19:45', wed:'19:45', thu:'19:45', fri:'19:45', sat:'18:00', sun:'18:00'},
+  windLead:45, grace:30, jobMin:10, studyMin:15, fullMin:25, minMin:10};
+const SCHED_DAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+const toMin = t => { const m = /^(\d{1,2}):(\d{2})$/.exec(t || ''); return m && +m[1] < 24 && +m[2] < 60 ? +m[1] * 60 + +m[2] : null; };
+const toHM = m => { m = ((Math.round(m) % 1440) + 1440) % 1440; return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); };
+const niceTime = m => { m = ((Math.round(m) % 1440) + 1440) % 1440; const h = Math.floor(m / 60), mm = m % 60; return ((h + 11) % 12 + 1) + (mm ? ':' + String(mm).padStart(2, '0') : '') + (h < 12 ? 'am' : 'pm'); };
+// is minute-of-day m inside [a, b), wrapping past midnight
+const inSpan = (m, a, b) => a <= b ? m >= a && m < b : m >= a || m < b;
+function scheduleOf(hs){
+  const D = SCHEDULE_DEFAULTS, sl = (hs && hs.sleep) || {}, sc = (hs && hs.schedule) || {};
+  const num = (v, d, lo, hi) => typeof v === 'number' && isFinite(v) ? Math.min(hi, Math.max(lo, Math.round(v))) : d;
+  const tm = (v, d) => toMin(v) != null ? v : d;
+  const cutoff = {}, evening = {};
+  Object.keys(D.cutoff).forEach(k => { cutoff[k] = tm((sc.cutoff || {})[k], D.cutoff[k]); evening[k] = tm((sc.evening || {})[k], D.evening[k]); });
+  const bedtime = tm(sl.bedtime, D.bedtime), needMin = num(sc.needMin, D.needMin, 240, 720), windLead = num(sc.windLead, D.windLead, 0, 240);
+  const bed = toMin(bedtime), wake = (bed + needMin) % 1440, wind = (bed - windLead + 1440) % 1440;
+  const cutoffOn = d => toMin(cutoff[SCHED_DAYS[d.getDay()]]);
+  return {bedtime, needMin, cutoff, evening, windLead,
+    grace:num(sc.grace, D.grace, 0, 240), jobMin:num(sc.jobMin, D.jobMin, 1, 120), studyMin:num(sc.studyMin, D.studyMin, 5, 120),
+    fullMin:num(sc.fullMin, D.fullMin, 1, 240), minMin:num(sc.minMin, D.minMin, 1, 240),
+    // derived, as minutes after midnight
+    bed, wake, wind, cutoffOn, eveningOn:d => toMin(evening[SCHED_DAYS[d.getDay()]]),
+    cardStart:(wake - 60 + 1440) % 1440, cardEndOn:d => (cutoffOn(d) + 180) % 1440}; // sleep card: 1h before wake to cutoff + 3h
+}
+/* schedule:end */
 
 /* streaks:begin — pure functions, also run in node by the tests */
 const ymd = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
@@ -485,36 +536,41 @@ const saveHabits = () => set('habits', habits);
 const saveSettings = () => set('settings', settings);
 const saveEntries = () => set('entries', {entries});
 
-/* ---------- bedtime targets ----------
-   settings.sleep = {bedtime:'HH:MM', wake?:'HH:MM', moves:[{day, bedtime, wake}]}. Wake follows
-   bedtime + 7h 45m until it's set by hand. The Bedtime habit reads them: Full = lights off by the
-   target, Minimum = within 30 minutes after. Focus Desk starts its wind-down 45 minutes before. */
-const DEFAULT_BEDTIME = '23:15', WAKE_AFTER = 465;
-const m2hm = m => { m = ((m % 1440) + 1440) % 1440; return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); };
-const nice = hm => { const m = hmMins(hm), h = Math.floor(m / 60), mm = m % 60; return ((h + 11) % 12 + 1) + (mm ? ':' + String(mm).padStart(2, '0') : '') + (h < 12 ? 'am' : 'pm'); };
-function sleepT(){
-  const s = settings.sleep || {}, bed = hmMins(s.bedtime) != null ? s.bedtime : DEFAULT_BEDTIME;
-  return {bed, wake:hmMins(s.wake) != null ? s.wake : m2hm(hmMins(bed) + WAKE_AFTER), wakeSet:hmMins(s.wake) != null, moves:Array.isArray(s.moves) ? s.moves : []};
-}
-function syncBedtimeText(){
+/* ---------- Schedule ----------
+   habits:settings.sleep = {bedtime, moves:[{day, bedtime}]}, habits:settings.schedule = the rest of the
+   Schedule (see scheduleOf). The wake target is bedtime + sleep need, never stored. The Bedtime habit
+   follows it: Full = lights off by the target, Minimum = within BEDTIME_MARGIN after; it can be logged
+   from that day's evening start until the sleep card opens (1h before the wake target). */
+const BEDTIME_MARGIN = 30, MOVE_STEP = 30;
+const m2hm = toHM, nice = hm => niceTime(hmMins(hm));
+const sched = () => scheduleOf(settings);
+// a wake target saved by the previous version becomes the sleep need it implied
+(function(){
+  const sl = settings.sleep;
+  if (!sl || toMin(sl.wake) == null) return;
+  const sc = Object.assign({}, settings.schedule);
+  if (typeof sc.needMin !== 'number') sc.needMin = (toMin(sl.wake) - toMin(sched().bedtime) + 1440) % 1440;
+  settings.schedule = sc; settings.sleep = Object.assign({}, sl); delete settings.sleep.wake; saveSettings();
+})();
+function syncBedtime(){
   const h = habits.find(x => x.window); if (!h) return;
-  const t = sleepT(), full = 'Lights off by ' + nice(t.bed), min = 'Lights off by ' + nice(m2hm(hmMins(t.bed) + 30));
-  if (h.full !== full || h.min !== min){ h.full = full; h.min = min; saveHabits(); }
+  const S = sched(), full = 'Lights off by ' + niceTime(S.bed), min = 'Lights off by ' + niceTime(S.bed + BEDTIME_MARGIN);
+  const win = [S.eveningOn(new Date()), S.cardStart];
+  if (h.full !== full || h.min !== min || !Array.isArray(h.window) || h.window[0] !== win[0] || h.window[1] !== win[1]){ h.full = full; h.min = min; h.window = win; saveHabits(); }
 }
-function setSleep(change){
+function setSchedule(change){
   settings = loadSettings();
-  const sl = Object.assign({}, settings.sleep); change(sl); settings.sleep = sl; saveSettings();
-  syncBedtimeText(); render();
+  const sc = Object.assign({}, settings.schedule), sl = Object.assign({}, settings.sleep);
+  change(sc, sl); settings.schedule = sc; settings.sleep = sl; saveSettings();
+  syncBedtime(); render();
 }
 function moveEarlier(){
-  setSleep(sl => {
-    const t = sleepT();
-    sl.bedtime = m2hm(hmMins(t.bed) - 30);
-    if (t.wakeSet) sl.wake = m2hm(hmMins(t.wake) - 30); // otherwise it follows the bedtime
-    sl.moves = t.moves.concat({day:ymd(new Date()), bedtime:sl.bedtime, wake:sl.wake || m2hm(hmMins(sl.bedtime) + WAKE_AFTER)});
+  setSchedule((sc, sl) => {
+    sl.bedtime = toHM(sched().bed - MOVE_STEP); // the wake target follows
+    sl.moves = (Array.isArray(sl.moves) ? sl.moves : []).concat({day:ymd(new Date()), bedtime:sl.bedtime});
   });
 }
-syncBedtimeText();
+syncBedtime();
 // one-off wording update for David's own Building and Textbook minimums (owner mode only)
 (function(){
   let owner = false; try { owner = !!localStorage.getItem('site:owner'); } catch (e) {}
@@ -539,13 +595,13 @@ const within48 = day => { const d = dateOf(day); return now() - new Date(d.getFu
 function blockedReason(h, day, kind, past){
   if (h.window){
     if (past) return 'Bedtime is only logged on the night.';
-    if (day !== habitToday(h, new Date()) || !inWindow(h.window, new Date())) return 'Log between 9pm and 3am.';
+    if (day !== habitToday(h, new Date()) || !inWindow(h.window, new Date())) return 'Log between ' + niceTime(h.window[0]) + ' and ' + niceTime(h.window[1]) + '.';
   }
   if (past){
     if (!within48(day)) return 'Locked: more than 48 hours ago.';
     if (!$('lateReason').value.trim()) return 'Say what happened first.';
   }
-  if (kind === 'full' && isHeavy(h)) return 'Full comes from a 25-min Focus Desk block.';
+  if (kind === 'full' && isHeavy(h)) return 'Full comes from a ' + sched().fullMin + '-min Focus Desk block.';
   if (kind === 'reserve'){
     const e = entryFor(h.id, day);
     if (!(e && e.kind === 'reserve') && reservesUsed(h, day) >= (h.reserves ?? 2)) return 'No reserves left this week';
@@ -576,9 +632,10 @@ function setNote(id, text){
 }
 
 /* ---------- render: checklist rows ---------- */
-let openReserve = null, pastDay = null;
+let openReserve = null, pastDay = null, reserveDraft = '', flashId = null;
 function habitRow(h, day, past){
-  const li = el('li', 'habit'), e = entryFor(h.id, day), fd = e && e.source === 'focusdesk';
+  const li = el('li', 'habit' + (!past && flashId === h.id ? ' flash' : '')), e = entryFor(h.id, day), fd = e && e.source === 'focusdesk';
+  if (!past) li.dataset.habit = h.id;
   const head = el('div', 'habit-head'), meta = el('span', 'habit-meta');
   head.append(el('span', 'habit-name', h.name));
   if (h.cadence === 'weekly'){ const w = weekStatus(h, day); meta.append(el('span', null, w.done + ' of ' + w.target + ' this week')); }
@@ -596,9 +653,9 @@ function habitRow(h, day, past){
     const fp = el('p', 'full-text'); fp.append(el('span', 'eyebrow', 'Full '), document.createTextNode(h.full || '—'));
     pr.append(mp, fp); li.append(pr);
     if (h.window){
-      const t = sleepT(), last = t.moves[t.moves.length - 1], box = el('div', 'bed-targets');
-      box.append(el('p', 'row-note', 'Target: lights off ' + nice(t.bed) + ' · wake ' + nice(t.wake)));
-      const mv = el('button', 'btn small', 'Move 30 min earlier'); mv.type = 'button'; mv.onclick = moveEarlier;
+      const S = sched(), moves = (settings.sleep && settings.sleep.moves) || [], last = moves[moves.length - 1], box = el('div', 'bed-targets');
+      box.append(el('p', 'row-note', 'Target: lights off ' + niceTime(S.bed) + ' · wake ' + niceTime(S.wake)));
+      const mv = el('button', 'btn small', 'Move ' + MOVE_STEP + ' min earlier'); mv.type = 'button'; mv.onclick = moveEarlier;
       box.append(mv, el('p', 'why', 'Move again after 2 nights you hit Full.' + (last ? ' Last moved ' + shortDate(last.day) + '.' : '')));
       li.append(box);
     }
@@ -630,13 +687,21 @@ function habitRow(h, day, past){
 
   if (!fd && openReserve === h.id + day){
     const rs = el('div', 'reasons'); rs.append(el('span', 'eyebrow', 'Why skip?'));
-    RESERVE_REASONS.forEach(r => { const b = el('button', 'tag', r); b.type = 'button'; b.onclick = () => { openReserve = null; setEntry(h, day, 'reserve', {reason:r}, past); }; rs.append(b); });
+    RESERVE_REASONS.forEach(r => { const b = el('button', 'tag', r); b.type = 'button'; b.onclick = () => { openReserve = null; reserveDraft = ''; setEntry(h, day, 'reserve', {reason:r}, past); }; rs.append(b); });
+    // or your own words (prefilled when Focus Desk sends you here)
+    const f = el('input', 'field'); f.maxLength = 60; f.placeholder = 'Or write the reason'; f.value = reserveDraft; f.setAttribute('aria-label', 'Reserve reason');
+    f.addEventListener('input', () => { reserveDraft = f.value; });
+    const go = el('button', 'btn small', 'Save reserve'); go.type = 'button';
+    go.onclick = () => { const r = f.value.trim(); if (!r) return f.focus(); openReserve = null; reserveDraft = ''; setEntry(h, day, 'reserve', {reason:r}, past); };
+    rs.append(f, go);
+    const why = blockedReason(h, day, 'reserve', past);
+    if (why && !(e && e.kind === 'reserve')) rs.append(el('span', 'row-note', why));
     li.append(rs);
   }
 
   const notes = [];
   if (general) notes.push(general);
-  else if (!fd && isHeavy(h)) notes.push('Full comes from a 25-min block in Focus Desk.');
+  else if (!fd && isHeavy(h)) notes.push('Full comes from a ' + sched().fullMin + '-min block in Focus Desk.');
   if (e && e.late) notes.push('Filled in later: ' + e.late);
   if (notes.length) li.append(el('p', 'row-note', notes.join(' ')));
 
@@ -829,10 +894,60 @@ const openReview = open => { $('review').hidden = !open; $('reviewBtn').setAttri
 $('reviewBtn').onclick = () => openReview($('review').hidden);
 
 /* ---------- settings ---------- */
+const fmtDur = m => Math.floor(m / 60) + ':' + String(m % 60).padStart(2, '0');
+// "7:45", "7h 45m", "7h45", "7.75" -> minutes
+const parseDur = v => {
+  v = String(v || '').trim().toLowerCase(); let m;
+  if ((m = /^(\d{1,2})\s*[:h]\s*(\d{1,2})\s*m?$/.exec(v))) return +m[1] * 60 + +m[2];
+  if ((m = /^(\d{1,2}(?:\.\d+)?)\s*h?$/.exec(v))) return Math.round(parseFloat(m[1]) * 60);
+  return null;
+};
+function renderSchedule(){
+  const S = sched(), box = $('schedFields');
+  if (!box.contains(document.activeElement)){
+    box.textContent = '';
+    const field = (label, why, input) => { const l = el('label', null, label); l.append(input, el('span', 'why', why)); box.append(l); return l; };
+    const timeIn = (v, on) => { const f = el('input', 'field'); f.type = 'time'; f.value = v; f.addEventListener('change', () => { if (toMin(f.value) != null) on(f.value); }); return f; };
+    const numIn = (v, lo, hi, on) => { const f = el('input', 'field'); f.type = 'number'; f.min = lo; f.max = hi; f.value = v; f.addEventListener('change', () => { const n = parseInt(f.value, 10); if (!isNaN(n)) on(Math.min(hi, Math.max(lo, n))); }); return f; };
+    field('Bedtime target', 'Lights off. Full on the Bedtime habit means off by this time.', timeIn(S.bedtime, v => setSchedule((sc, sl) => { sl.bedtime = v; })));
+    const need = el('input', 'field'); need.value = fmtDur(S.needMin); need.placeholder = 'e.g. 7:45'; need.inputMode = 'decimal';
+    need.addEventListener('change', () => { const m = parseDur(need.value); if (m != null && m >= 240 && m <= 720) setSchedule(sc => { sc.needMin = m; }); else need.value = fmtDur(sched().needMin); });
+    const nl = field('Sleep need (hours:minutes)', 'How long you need asleep. Wake target = bedtime + this.', need);
+    const est = sleepStats(loadSleep(), new Date()).need;
+    if (est != null){
+      const b = el('button', 'btn small', 'Use my estimate (' + fmtDur(Math.round(est * 60)) + ')'); b.type = 'button';
+      b.onclick = () => setSchedule(sc => { sc.needMin = Math.round(est * 60); });
+      nl.append(b);
+    }
+    field('Wake target', 'Bedtime + sleep need. Changing it changes the sleep need.', timeIn(toHM(S.wake), v => setSchedule(sc => { sc.needMin = Math.min(720, Math.max(240, (toMin(v) - S.bed + 1440) % 1440)); })));
+    field('Wind-down lead (min)', 'Wind-down starts this long before bedtime.', numIn(S.windLead, 0, 240, v => setSchedule(sc => { sc.windLead = v; })));
+    field('Short-morning grace (min)', 'How late after the wake target before Focus Desk shows the short-morning card.', numIn(S.grace, 0, 240, v => setSchedule(sc => { sc.grace = v; })));
+    field('Job search minimum (min)', 'The job search you still do on a missed day.', numIn(S.jobMin, 1, 120, v => setSchedule(sc => { sc.jobMin = v; })));
+    field('Study minimum (min)', 'The one study block on a missed morning.', numIn(S.studyMin, 5, 120, v => setSchedule(sc => { sc.studyMin = v; })));
+    field('Full threshold (min)', 'A Focus Desk block this long logs Full in Habits.', numIn(S.fullMin, 1, 240, v => setSchedule(sc => { sc.fullMin = v; })));
+    field('Minimum threshold (min)', 'A block this long logs Minimum. Shorter logs nothing.', numIn(S.minMin, 1, 240, v => setSchedule(sc => { sc.minMin = v; })));
+  }
+  const days = $('schedDays');
+  if (!days.contains(document.activeElement)){
+    days.textContent = '';
+    days.append(el('span', 'h', 'Day'), el('span', 'h', 'Morning cutoff'), el('span', 'h', 'Evening start'));
+    [['mon', 'Monday'], ['tue', 'Tuesday'], ['wed', 'Wednesday'], ['thu', 'Thursday'], ['fri', 'Friday'], ['sat', 'Saturday'], ['sun', 'Sunday']].forEach(([k, name]) => {
+      const t = (key, v) => { const f = el('input', 'field'); f.type = 'time'; f.value = v; f.setAttribute('aria-label', name + ' ' + (key === 'cutoff' ? 'morning cutoff' : 'evening start'));
+        f.addEventListener('change', () => { if (toMin(f.value) != null) setSchedule(sc => { sc[key] = Object.assign({}, sc[key], {[k]:f.value}); }); }); return f; };
+      days.append(el('span', null, name), t('cutoff', S.cutoff[k]), t('evening', S.evening[k]));
+    });
+  }
+  const dl = $('schedDerived'); dl.textContent = '';
+  const row = (label, value) => { const li = el('li'); li.append(label + ': ', el('b', null, value)); dl.append(li); };
+  const today = new Date();
+  row('Wake target', niceTime(S.wake) + ' (bedtime + ' + fmtDur(S.needMin) + ')');
+  row('Wind-down', niceTime(S.wind) + ' (bedtime − ' + S.windLead + ' min)');
+  row('Evening finish', niceTime(S.wind) + ' (= wind-down)');
+  row('Sleep card today', niceTime(S.cardStart) + '–' + niceTime(S.cardEndOn(today)) + ' (1h before wake to cutoff + 3h)');
+  $('mapWhy').textContent = 'A saved Focus Desk block with a subject logs the matching habit: ' + S.fullMin + '+ min as Full, ' + S.minMin + '+ min as Minimum.';
+}
 function renderSettings(){
-  const t = sleepT();
-  if (document.activeElement !== $('setBed')) $('setBed').value = t.bed;
-  if (document.activeElement !== $('setWake')) $('setWake').value = t.wake;
+  renderSchedule();
   const box = $('editors'); box.textContent = '';
   habits.forEach((h, i) => {
     const row = el('div', 'hedit');
@@ -860,8 +975,9 @@ function renderSettings(){
       row.append(l);
     }
     row.append(input('Reserves per week', h.reserves ?? 2, null, v => { h.reserves = v; }, [0, 7]));
-    row.append(input('Minimum', h.min, 'wide', v => { h.min = v; }));
-    row.append(input('Full', h.full, 'wide', v => { h.full = v; }));
+    const mi = input('Minimum', h.min, 'wide', v => { h.min = v; }), fu = input('Full', h.full, 'wide', v => { h.full = v; });
+    if (h.window) [mi, fu].forEach(l => { l.querySelector('input').disabled = true; l.title = 'Set by the bedtime target in Schedule'; }); // written from the Schedule
+    row.append(mi, fu);
     const tools = el('div', 'tools wide');
     const act = el('label', 'inline'), cb = el('input'); cb.type = 'checkbox'; cb.checked = h.active !== false;
     cb.addEventListener('change', () => { h.active = cb.checked; saveHabits(); render(); });
@@ -875,7 +991,7 @@ function renderSettings(){
     lb.addEventListener('change', () => { h.learning = lb.checked; saveHabits(); render(); });
     lrn.append(lb, document.createTextNode('Learning'));
     tools.append(act, lrn, up, dn);
-    if (h.window) tools.append(el('span', 'why', 'Logged 9pm–3am only'));
+    if (h.window) tools.append(el('span', 'why', 'Logged ' + niceTime(h.window[0]) + '–' + niceTime(h.window[1]) + ' only'));
     row.append(tools); box.append(row);
   });
   const map = $('mapping'); map.textContent = '';
@@ -899,8 +1015,6 @@ function setTarget(h, v){
   if (targetFor({targets:log}, thisMon) !== v) log.push({from:next, target:v});
   h.targets = log; h.target = v;
 }
-$('setBed').addEventListener('change', () => { const v = $('setBed').value; if (v) setSleep(sl => { sl.bedtime = v; }); });
-$('setWake').addEventListener('change', () => { const v = $('setWake').value; setSleep(sl => { if (v) sl.wake = v; else delete sl.wake; }); });
 $('settingsBtn').onclick = () => { const s = $('settings'); s.hidden = !s.hidden; $('settingsBtn').setAttribute('aria-expanded', String(!s.hidden)); };
 $('addHabit').onclick = () => {
   habits.push({id:mkId(), name:'New habit', cadence:'daily', target:1, min:'', full:'', reserves:2, active:true, learning:false, createdDay:ymd(new Date())});
@@ -913,14 +1027,16 @@ $('exportBtn').onclick = () => {
   const nameOf = id => (habits.find(h => h.id === id) || {}).name || null, reviews = loadReviews();
   const data = {
     app:'habits', version:1, exportedAt:new Date().toISOString(), timezone:Intl.DateTimeFormat().resolvedOptions().timeZone,
-    notes:'habits = what is tracked: cadence daily or weekly; target = Full+Minimum entries needed per Mon-Sun week, each Reserve lowering it by 1 (floor 1); targets = target history, each {from: the Monday it starts, target}, so past weeks are judged by the target they had; reserves = emergency skips allowed per week; active false = archived; learning = counts toward the Learning streak (consecutive days with a Full or Minimum on any Learning habit), while the Showed up streak counts every habit. entries = at most one per habit per day: kind full | min | reserve; reserve has a reason; late = why a past day was filled in afterwards (allowed up to 48h); source focusdesk = written automatically from a timed Focus Desk block, with focusedMin and blockId; day = local date the entry is for; time = when it was logged. mapping = Focus Desk subject -> habit id. reviews = one weekly review per ISO week (Mon-Sun, monday = its first day), answers keyed by question text; done = all three answered. sleep.nights = the morning sleep log, one per night: night = the date of the evening it started, off = lights off, woke = wake time, rested = 1-5, hours = woke minus off minus 15 min to fall asleep. sleep.targets = bedtime and wake targets (Bedtime Full = lights off by the bedtime target, Minimum = within 30 min after it); moves = each Move 30 min earlier, with its date.',
+    notes:'habits = what is tracked: cadence daily or weekly; target = Full+Minimum entries needed per Mon-Sun week, each Reserve lowering it by 1 (floor 1); targets = target history, each {from: the Monday it starts, target}, so past weeks are judged by the target they had; reserves = emergency skips allowed per week; active false = archived; learning = counts toward the Learning streak (consecutive days with a Full or Minimum on any Learning habit), while the Showed up streak counts every habit. entries = at most one per habit per day: kind full | min | reserve; reserve has a reason; late = why a past day was filled in afterwards (allowed up to 48h); source focusdesk = written automatically from a timed Focus Desk block, with focusedMin and blockId; day = local date the entry is for; time = when it was logged. mapping = Focus Desk subject -> habit id. reviews = one weekly review per ISO week (Mon-Sun, monday = its first day), answers keyed by question text; done = all three answered. sleep.nights = the morning sleep log, one per night: night = the date of the evening it started, off = lights off, woke = wake time, rested = 1-5, hours = woke minus off minus 15 min to fall asleep. schedule = every time and length the apps use (wake = bedtime + sleep need; wind-down = bedtime - lead; Bedtime Full = lights off by the bedtime target, Minimum = within 30 min after it; bedtimeMoves = each 30-min move earlier, with its date).',
     habits:habits.map(h => Object.assign({}, h, {learning:isLearning(h)})), mapping:settings.mapping,
     entries:entries.map(e => Object.assign({}, e, {time:iso(e.at), habitName:nameOf(e.habitId)})),
     reviews:Object.values(reviews).sort((a, b) => a.week < b.week ? -1 : 1).map(r => ({
       week:r.week, monday:r.monday, sunday:r.monday ? addDays(r.monday, 6) : null, done:reviewDone(r), updated:iso(r.updatedAt),
       answers:{[REVIEW_QS.q1]:r.q1 || '', [REVIEW_QS.q2]:r.q2 || '', [REVIEW_QS.q3]:r.q3 || ''}
     })),
-    sleep:{targets:(({bed, wake, moves}) => ({bedtime:bed, wake, moves}))(sleepT()), nights:loadSleep()},
+    schedule:(S => ({bedtime:S.bedtime, wake:toHM(S.wake), sleepNeedMin:S.needMin, windDown:toHM(S.wind), windLeadMin:S.windLead, morningCutoff:S.cutoff, eveningStart:S.evening,
+      shortMorningGraceMin:S.grace, jobSearchMin:S.jobMin, studyMin:S.studyMin, fullThresholdMin:S.fullMin, minimumThresholdMin:S.minMin, bedtimeMoves:(settings.sleep && settings.sleep.moves) || []}))(sched()),
+    sleep:{nights:loadSleep()},
     raw:{habits, settings, entries:{entries}, reviews:{reviews}, sleep:{nights:loadSleep()}}
   };
   const d = new Date(), pad = n => String(n).padStart(2, '0');
@@ -962,12 +1078,13 @@ $('importFile').addEventListener('change', async () => {
 
 /* ---------- boot ---------- */
 /* ---------- sleep log ----------
-   04:00–12:00: one entry per night in habits:sleep ({nights:[…]}), re-read before each write. */
+   Shown from 1h before the wake target until the day's morning cutoff + 3h (sched().cardStart /
+   cardEndOn). One entry per night in habits:sleep ({nights:[…]}), re-read before each write. */
 let slRest = null;
 const lastNight = () => addDays(ymd(new Date()), -1);
 function renderSleep(){
-  const hr = new Date().getHours(), card = $('sleepLog'), night = lastNight();
-  card.hidden = !(hr >= 4 && hr < 12);
+  const d = new Date(), S = sched(), card = $('sleepLog'), night = lastNight();
+  card.hidden = !inSpan(d.getHours() * 60 + d.getMinutes(), S.cardStart, S.cardEndOn(d));
   const nights = loadSleep(), mine = nights.find(n => n.night === night);
   if (!card.hidden && card.dataset.night !== night){
     card.dataset.night = night;
@@ -1000,18 +1117,36 @@ $('slSave').onclick = () => {
   renderSleep();
 };
 
-function render(){ renderToday(); renderPast(); renderStreaks(); renderSleep(); renderReview(); renderSettings(); }
+function render(){
+  syncBedtime();
+  const bed = habits.find(h => h.window && h.active !== false);
+  $('pastWhy').textContent = 'Older days are locked.' + (bed ? ' ' + bed.name + ' is only logged on the night itself, ' + niceTime(bed.window[0]) + '–' + niceTime(bed.window[1]) + '.' : '');
+  renderToday(); renderPast(); renderStreaks(); renderSleep(); renderReview(); renderSettings();
+}
+/* /habits/#reserve=<habitId>&reason=<text> (from Focus Desk's "Not tonight"): open that habit's
+   Reserve picker for today with the reason filled in, scroll to it and highlight it briefly. */
+function reserveFromHash(){
+  const m = /^#reserve=([^&]*)(?:&reason=(.*))?$/.exec(location.hash); if (!m) return;
+  history.replaceState(null, '', location.pathname + location.search);
+  let id, reason; try { id = decodeURIComponent(m[1]); reason = m[2] ? decodeURIComponent(m[2]) : ''; } catch (e) { return; }
+  const h = habits.find(x => x.id === id && x.active !== false); if (!h) return;
+  openReserve = h.id + habitToday(h, new Date()); reserveDraft = reason; flashId = h.id; render();
+  const li = document.querySelector('#checklist [data-habit="' + CSS.escape(h.id) + '"]');
+  if (li){ li.scrollIntoView({block:'center'}); const f = li.querySelector('.reasons .field'); if (f) f.focus({preventScroll:true}); }
+  setTimeout(() => { flashId = null; const x = document.querySelector('#checklist .habit.flash'); if (x) x.classList.remove('flash'); }, 2000);
+}
 render();
 // /desk/ links to /habits/#review
 const fromHash = () => { if (location.hash === '#review'){ openReview(true); $('review').scrollIntoView({block:'start'}); } };
 fromHash(); window.addEventListener('hashchange', fromHash);
+reserveFromHash(); window.addEventListener('hashchange', reserveFromHash);
 // Focus Desk (another tab) wrote an entry or a block: pick it up
 window.addEventListener('storage', ev => {
   if (!ev.key || ev.key.startsWith(P)) { habits = loadHabits(); settings = loadSettings(); entries = loadEntries(); render(); }
   else if (ev.key.startsWith('focusdesk:')) { renderReview(); renderSettings(); } // blocks, or subjects edited in Focus Desk
 });
-// re-render when the day rolls over or Bedtime's window opens/closes, so a page left open stays honest
-const clockKey = () => ymd(new Date()) + (new Date().getHours() >= 4 && new Date().getHours() < 12) + habits.filter(h => h.window).map(h => inWindow(h.window, new Date())).join();
+// re-render when the day rolls over, the sleep card opens/closes or Bedtime's window opens/closes
+const clockKey = () => { const d = new Date(), S = sched(); return ymd(d) + inSpan(d.getHours() * 60 + d.getMinutes(), S.cardStart, S.cardEndOn(d)) + habits.filter(h => h.window).map(h => inWindow(h.window, d)).join(); };
 let lastClock = clockKey();
 setInterval(() => { const k = clockKey(); if (k !== lastClock) { lastClock = k; render(); } }, 15000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { entries = loadEntries(); render(); } });

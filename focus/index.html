@@ -205,6 +205,9 @@ body[data-phase="idle"] .rule .kw{color:var(--muted)}
 .subj-chip .x{padding:0 6px}
 .subj-add{display:flex;gap:8px;max-width:320px}
 .subj-add .field{flex:1;min-width:0}
+.jobnote{font-size:14px;border-left:3px solid var(--ink);padding:6px 12px}
+.jobnote a{font-weight:700}
+.card-acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
 .evening{border-left:3px solid var(--ink);background:var(--panel);padding:10px 14px;display:flex;flex-direction:column;gap:4px}
 .next-task{background:var(--phase-soft);padding:10px 12px;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
 .next-task p{white-space:pre-wrap;overflow-wrap:anywhere}
@@ -292,8 +295,7 @@ body[data-phase="idle"] .rule .kw{color:var(--muted)}
     <label for="sLong">Long break, every 4th (min)<input class="field" id="sLong" type="number" min="5" max="45"></label>
     <label for="sVol">Alarm volume<select class="field" id="sVol"><option value="quiet">Quiet</option><option value="normal">Normal</option><option value="loud">Loud</option></select></label>
     <label class="inline" for="sSound"><input id="sSound" type="checkbox"> Alarm when a block or break ends</label>
-    <label for="sWind">Wind-down from<input class="field" id="sWind" type="time"><span class="why" id="sWindNote" hidden></span></label>
-    <label for="sFirst">First block at<input class="field" id="sFirst" type="time"></label>
+    <p class="why" id="schedNote" style="grid-column:1/-1"></p>
     <div><button class="btn small" id="testAlarm" type="button">Test alarm</button></div>
     <div class="subj-set">
       <span class="eyebrow">Subjects</span>
@@ -335,10 +337,22 @@ body[data-phase="idle"] .rule .kw{color:var(--muted)}
         </div>
 
         <div id="vIdle" class="col" style="gap:14px">
+          <p class="jobnote" id="jobNote" hidden></p>
           <p class="quiet-banner" id="windBanner" role="status" hidden></p>
+          <div class="evening" id="shortCard" hidden>
+            <p id="shortText"></p>
+            <div class="card-acts" id="shortActs">
+              <button class="btn primary small" id="shortStart" type="button">Start</button>
+              <button class="btn small" id="shortPick" type="button">Pick another subject</button>
+            </div>
+          </div>
           <div class="evening" id="eveningCard" hidden>
-            <p><b>Morning missed.</b> Evening minimum: job search (10 min), then one 15-min block. Finish by 9pm.</p>
+            <p id="eveningText"></p>
             <p class="why" id="eveningMin"></p>
+            <div class="card-acts">
+              <button class="btn small" id="eveNo" type="button">Not tonight</button>
+              <button class="btn small" id="eveFull" type="button">Full block instead</button>
+            </div>
           </div>
           <div class="resume" id="resumeBox" hidden>
             <span class="eyebrow" id="resumeLabel">Pick up here</span>
@@ -369,7 +383,7 @@ body[data-phase="idle"] .rule .kw{color:var(--muted)}
           <div class="subject-row" id="subjectRow" hidden>
             <span class="eyebrow">Subject</span>
             <div class="tags" id="subjects" role="group" aria-label="Subject"></div>
-            <span class="why" id="subjectWhy" hidden>25+ min logs Full in <a href="/habits/">Habits</a>, 10+ min logs Minimum.</span>
+            <span class="why" id="subjectWhy" hidden><span id="subjFull"></span>+ min logs Full in <a href="/habits/">Habits</a>, <span id="subjMin"></span>+ min logs Minimum.</span>
           </div>
           <div class="checks" id="checks" role="group" aria-label="Before you start"></div>
           <details class="dump" id="dumpBox">
@@ -382,7 +396,7 @@ body[data-phase="idle"] .rule .kw{color:var(--muted)}
             <button class="btn small" id="nudgeYes">Add 5 minutes</button>
             <button class="btn quiet small" id="nudgeNo">Not yet</button>
           </div>
-          <div class="row">
+          <div class="row" id="startRow">
             <button class="btn primary" id="startBtn">Start block</button>
             <div class="stepper" aria-label="Block length">
               <button id="lenDown" aria-label="Five minutes shorter">−</button>
@@ -573,8 +587,7 @@ const DEFAULT_RULES = [
   {id:'r4', if:'I just finished an exercise and want a reward', then:'I press Finished one, read the next problem and write its first line'},
   {id:'r5', if:'I wake up late', then:'I do one 25-minute block, log it as Minimum, and leave the streak alone'}
 ];
-const DEFAULTS = {focusMin:25, breakMin:5, longBreakMin:15, sound:true, volume:'normal', rules:DEFAULT_RULES, setup:{}, resume:null, nudgeSkip:0, seeded:['r4', 'r5'],
-  windDown:'21:30', firstBlock:'05:50'};
+const DEFAULTS = {focusMin:25, breakMin:5, longBreakMin:15, sound:true, volume:'normal', rules:DEFAULT_RULES, setup:{}, resume:null, nudgeSkip:0, seeded:['r4', 'r5']};
 // plans added after launch are seeded once into existing settings; deleting one afterwards sticks
 const LATER_RULES = ['r4', 'r5'];
 function migrate(s){
@@ -620,7 +633,8 @@ const todaysBlocks = () => log.blocks.filter(b => dayKey(b.end) === dayKey(now()
 
 /* ---------- link to Habits (/habits/) ----------
    Same origin, so both pages share localStorage. Saving a block that has a subject writes an
-   entry into habits:entries: Full for 25+ focused minutes, Minimum for 10+, nothing below.
+   entry into habits:entries: Full at the Schedule's Full threshold, Minimum at its Minimum threshold,
+   nothing below.
    One entry per habit per day, the best one seen (Full beats Minimum). The subject → habit
    mapping is edited on the Habits page (habits:settings). Works before Habits has ever been
    opened: it picks the entries up when it is. */
@@ -688,7 +702,7 @@ function weekFromHash(){
 const habitsGet = k => { try { const v = localStorage.getItem('habits:' + k); return v ? JSON.parse(v) : null; } catch (e) { return null; } };
 const habitsSet = (k, v) => { try { localStorage.setItem('habits:' + k, JSON.stringify(v)); } catch (e) {} };
 const ymd = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-const habitKind = min => min >= 25 ? 'full' : min >= 10 ? 'min' : null;
+const habitKind = min => min >= sched().fullMin ? 'full' : min >= sched().minMin ? 'min' : null;
 const subjectHabit = subject => { const s = habitsGet('settings') || {}; return Object.assign({}, DEFAULT_SUBJECT_MAP, s.mapping || {})[subject] || null; };
 function logToHabits(block){
   const kind = block.subject ? habitKind(block.focusedMin || 0) : null, habitId = kind && subjectHabit(block.subject);
@@ -704,37 +718,54 @@ function logToHabits(block){
   habitsSet('entries', {entries:list});
 }
 
-/* ---------- time of day: wind-down and morning ----------
-   Labels only, nothing is blocked. Wind-down runs to 04:00 from 45 minutes before Habits' bedtime
-   target (habits:settings.sleep, default 23:15), and the morning runs from Habits' wake target to
-   09:00. Without Habits data (no Bedtime habit saved in this browser) it falls back to Focus Desk's
-   own wind-down time (default 21:30) and a 05:00 morning. */
-const clockMins = hhmm => { const [h, m] = String(hhmm || '').split(':').map(Number); return isNaN(h) ? null : h * 60 + (m || 0); };
-const shortTime = hhmm => { const [h, m] = String(hhmm).split(':'); return Number(h) + ':' + m; };
-const hhmm = m => String(Math.floor(m / 60) % 24).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
-// cached briefly: dayMode() runs on every tick
-let sleepCache = null, sleepAt = -1e9;
-function habitsSleep(){
-  if (now() - sleepAt < 5000) return sleepCache;
-  sleepAt = now(); sleepCache = null;
-  const hs = habitsGet('habits');
-  if (!Array.isArray(hs) || !hs.some(h => h && h.window && h.active !== false)) return null;
-  const s = (habitsGet('settings') || {}).sleep || {};
-  const bed = (s.bedtime ? clockMins(s.bedtime) : null) ?? clockMins('23:15');
-  const wake = (s.wake ? clockMins(s.wake) : null) ?? (bed + 465) % 1440; // default wake: bedtime + 7h 45m
-  return sleepCache = {bed, wake, wind:(bed - 45 + 1440) % 1440};
+/* schedule:begin — the Schedule (Habits → Settings → Schedule), shared by Habits, Focus Desk and Desk.
+   Every clock time and length in a card or rule comes from here. Stored in habits:settings
+   (sleep.bedtime, schedule.*); anything that follows from them is derived below. The three copies
+   (habits/, focus/, desk/) must stay identical. */
+const SCHEDULE_DEFAULTS = {bedtime:'23:15', needMin:465,
+  cutoff:{mon:'08:30', tue:'08:30', wed:'08:30', thu:'08:30', fri:'08:30', sat:'09:00', sun:'08:30'},
+  evening:{mon:'19:45', tue:'19:45', wed:'19:45', thu:'19:45', fri:'19:45', sat:'18:00', sun:'18:00'},
+  windLead:45, grace:30, jobMin:10, studyMin:15, fullMin:25, minMin:10};
+const SCHED_DAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+const toMin = t => { const m = /^(\d{1,2}):(\d{2})$/.exec(t || ''); return m && +m[1] < 24 && +m[2] < 60 ? +m[1] * 60 + +m[2] : null; };
+const toHM = m => { m = ((Math.round(m) % 1440) + 1440) % 1440; return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); };
+const niceTime = m => { m = ((Math.round(m) % 1440) + 1440) % 1440; const h = Math.floor(m / 60), mm = m % 60; return ((h + 11) % 12 + 1) + (mm ? ':' + String(mm).padStart(2, '0') : '') + (h < 12 ? 'am' : 'pm'); };
+// is minute-of-day m inside [a, b), wrapping past midnight
+const inSpan = (m, a, b) => a <= b ? m >= a && m < b : m >= a || m < b;
+function scheduleOf(hs){
+  const D = SCHEDULE_DEFAULTS, sl = (hs && hs.sleep) || {}, sc = (hs && hs.schedule) || {};
+  const num = (v, d, lo, hi) => typeof v === 'number' && isFinite(v) ? Math.min(hi, Math.max(lo, Math.round(v))) : d;
+  const tm = (v, d) => toMin(v) != null ? v : d;
+  const cutoff = {}, evening = {};
+  Object.keys(D.cutoff).forEach(k => { cutoff[k] = tm((sc.cutoff || {})[k], D.cutoff[k]); evening[k] = tm((sc.evening || {})[k], D.evening[k]); });
+  const bedtime = tm(sl.bedtime, D.bedtime), needMin = num(sc.needMin, D.needMin, 240, 720), windLead = num(sc.windLead, D.windLead, 0, 240);
+  const bed = toMin(bedtime), wake = (bed + needMin) % 1440, wind = (bed - windLead + 1440) % 1440;
+  const cutoffOn = d => toMin(cutoff[SCHED_DAYS[d.getDay()]]);
+  return {bedtime, needMin, cutoff, evening, windLead,
+    grace:num(sc.grace, D.grace, 0, 240), jobMin:num(sc.jobMin, D.jobMin, 1, 120), studyMin:num(sc.studyMin, D.studyMin, 5, 120),
+    fullMin:num(sc.fullMin, D.fullMin, 1, 240), minMin:num(sc.minMin, D.minMin, 1, 240),
+    // derived, as minutes after midnight
+    bed, wake, wind, cutoffOn, eveningOn:d => toMin(evening[SCHED_DAYS[d.getDay()]]),
+    cardStart:(wake - 60 + 1440) % 1440, cardEndOn:d => (cutoffOn(d) + 180) % 1440}; // sleep card: 1h before wake to cutoff + 3h
 }
-const windStart = () => { const sl = habitsSleep(); return sl ? sl.wind : clockMins(settings.windDown) ?? clockMins(DEFAULTS.windDown); };
+/* schedule:end */
+
+/* ---------- time of day ----------
+   Labels only, nothing is blocked. Everything comes from Habits' Schedule (habits:settings), with its
+   defaults when Habits has never been opened here: wind-down runs from bedtime − lead until the wake
+   target, the morning from the wake target until the day's morning cutoff. Cached briefly because
+   dayMode() runs on every tick; a change in Habits (storage event) clears it. */
+let schedCache = null, schedAt = -1e9;
+const sched = () => { if (now() - schedAt >= 5000){ schedAt = now(); schedCache = scheduleOf(habitsGet('settings')); } return schedCache; };
+const minsNow = d => d.getHours() * 60 + d.getMinutes();
 function dayMode(){
-  const d = new Date(), m = d.getHours() * 60 + d.getMinutes(), end = 240;
-  const start = windStart(), sl = habitsSleep();
-  if (start <= end ? m >= start && m < end : m >= start || m < end) return 'wind';
-  const ms = sl ? sl.wake : 300, me = ms >= 540 ? ms + 120 : 540;
-  if (m >= ms && m < me) return 'morning';
+  const d = new Date(), m = minsNow(d), S = sched();
+  if (inSpan(m, S.wind, S.wake)) return 'wind';
+  if (inSpan(m, S.wake, S.cutoffOn(d))) return 'morning';
   return '';
 }
-// what a page left open on the idle screen watches, so it re-renders when any of it changes
-const modeSig = () => { const d = new Date(); return dayMode() + (d.getHours() >= 18 ? 'e' : ''); };
+// what a page left open on the idle screen watches (cards depend on the minute)
+const modeSig = () => { const d = new Date(); return dayMode() + minsNow(d); };
 
 /* ---------- streak ----------
    Pure: everything comes from log.blocks, so existing history counts. A day is active when
@@ -832,7 +863,9 @@ function fmt(ms){ const s = Math.ceil(ms / 1000); return String(Math.floor(s / 6
 function startFocus(){
   ensureAudio(); stopAlarm(); $('repMsg').hidden = true;
   const goal = $('goal').value.trim();
-  const len = blockLen(), mins = dayMode() === 'wind' ? Math.min(len, 25) : len; // wind-down: short block only
+  const sm = shortMorning();
+  if (sm && sm.len < sched().minMin) return; // short morning with no time left: no block
+  const len = blockLen(), mins = dayMode() === 'wind' ? Math.min(len, sched().studyMin) : len; // wind-down: short block only
   T.lenOnce = null; // a this-block-only length is used up
   const total = mins * 60000;
   T = Object.assign(T, {phase:'focus', running:true, total, endAt:now() + total, remaining:null,
@@ -1018,9 +1051,10 @@ function renderTimer(){
     const mode = dayMode(), r = settings.resume;
     lastMode = modeSig();
     $('resumeBox').hidden = !r; if (r) $('resumeText').textContent = r.text;
-    $('resumeLabel').textContent = mode === 'morning' ? 'Morning block. Resume note:' : 'Pick up here';
+    $('resumeLabel').textContent = mode === 'morning' && !shortMorning() ? 'Morning block. Resume note:' : 'Pick up here';
     $('windBanner').hidden = mode !== 'wind';
-    $('windBanner').textContent = 'Rest now. First block at ' + shortTime(settings.firstBlock || DEFAULTS.firstBlock) + '.';
+    $('windBanner').textContent = 'Rest now. First block at ' + niceTime(sched().wake) + '.';
+    renderJobNote(); renderShortMorning();
     renderEvening();
     $('lenVal').textContent = blockLen() + ' min';
     $('startBtn').textContent = mode === 'wind' ? 'Start anyway (short block)' : 'Start ' + blockLen() + '-min block';
@@ -1049,7 +1083,7 @@ function renderTimer(){
     const r = (T.block && T.block.reps) || 0;
     // say up front what saving will write to Habits, so it's never a surprise
     const sub = T.block && subjectById(T.block.subject), k = habitKind(m);
-    const toHabits = !sub || !subjectHabit(sub.id) ? '' : k ? ' Saving logs ' + sub.label + ' as ' + (k === 'full' ? 'Full' : 'Minimum') + ' in Habits.' : ' Under 10 minutes, so nothing goes to Habits.';
+    const toHabits = !sub || !subjectHabit(sub.id) ? '' : k ? ' Saving logs ' + sub.label + ' as ' + (k === 'full' ? 'Full' : 'Minimum') + ' in Habits.' : ' Under ' + sched().minMin + ' minutes, so nothing goes to Habits.';
     $('wrapSub').textContent = m + ' min focused, ' + (r ? r + (r === 1 ? ' exercise' : ' exercises') + ' finished, ' : '') + n + (n === 1 ? ' distraction' : ' distractions') + ' logged.' + toHabits + (T.completed ? '' : ' Ending early is information, not failure. If it keeps happening, try a shorter block.');
     document.title = 'Wrap up · Focus Desk';
   }
@@ -1066,19 +1100,55 @@ function renderNextTask(){
 }
 $('useTask').onclick = () => { $('goal').value = nextTaskText(); $('goal').focus(); };
 
-/* ---------- evening minimum ----------
-   On David's devices (owner mode): from 18:00 until wind-down, with no block saved today, a card
-   offers the evening minimum. It picks the study subject furthest behind its weekly target in
-   Habits (target − this week's Full + Minimum days) and sets this block alone to 15 minutes. */
+/* ---------- evening minimum, short morning, job search ----------
+   On David's devices (owner mode), all times and lengths from the Schedule:
+   - evening card: from the day's evening start until wind-down, with no block saved today. Picks the
+     study subject furthest behind its weekly target in Habits (target − this week's Full + Minimum
+     days) and sets this block alone to the study minimum.
+   - short morning: opened more than the grace after the wake target and before the day's cutoff.
+     One block fitted to the time left: min(normal length, minutes left − 5), down to 5 min steps.
+   - job search note: from evening start until wind-down while Job search has no entry today. */
 const STUDY = ['neetcode', 'build', 'textbook'];
 const EVENING_MIN = {neetcode:"Re-solve one problem you've done before. No AI, no notes.",
   build:"Write a test for last session's code, or rebuild the last function from memory.",
   textbook:"Explain the last section from memory in Feynman's Duck, then check the gaps."};
-const blockLen = () => T.lenOnce || settings.focusMin;
 const isOwner = () => { try { return !!localStorage.getItem('site:owner'); } catch (e) { return false; } };
+const eveningSpan = d => { const S = sched(); return inSpan(minsNow(d), S.eveningOn(d), S.wind); };
 function eveningOn(){
   const d = new Date();
-  return isOwner() && d.getHours() >= 18 && dayMode() !== 'wind' && todaysBlocks().length === 0;
+  return isOwner() && eveningSpan(d) && T.eveningHidden !== ymd(d) && todaysBlocks().length === 0;
+}
+function shortMorning(){
+  const d = new Date(), S = sched(), m = minsNow(d), cut = S.cutoffOn(d);
+  if (!isOwner() || !(m > S.wake + S.grace && m < cut)) return null;
+  const left = cut - m, len = Math.floor(Math.min(settings.focusMin, left - 5) / 5) * 5;
+  return {left, len, cut};
+}
+const blockLen = () => { const sm = shortMorning(); return sm ? sm.len : T.lenOnce || settings.focusMin; };
+function renderShortMorning(){
+  const sm = (T.phase || 'idle') === 'idle' ? shortMorning() : null;
+  $('shortCard').hidden = !sm; $('startRow').hidden = !!sm;
+  if (!sm) return;
+  const today = ymd(new Date());
+  if (T.morningDay !== today){ T.morningDay = today; if (!T.subject){ const b = behindSubject(); if (b) T.subject = b.id; } saveTimer(); }
+  const ok = sm.len >= sched().minMin, sub = subjectById(T.subject);
+  $('shortText').textContent = ok
+    ? 'Short morning: ' + sm.left + ' min until ' + niceTime(sm.cut) + '. One ' + sm.len + '-min block' + (sub ? ' on ' + sub.label : '') + '.'
+    : 'Not enough time. Job search moves to tonight.';
+  $('shortActs').hidden = !ok;
+  $('shortStart').textContent = 'Start ' + sm.len + '-min block';
+}
+$('shortStart').onclick = () => startFocus();
+$('shortPick').onclick = () => { const r = $('subjectRow'); r.scrollIntoView({block:'center', behavior:'smooth'}); const b = r.querySelector('button'); if (b) b.focus({preventScroll:true}); };
+// Job search: the Habits habit of that name
+function jobHabit(){ const hs = habitsGet('habits'); return Array.isArray(hs) ? hs.find(h => h && h.active !== false && /job\s*search/i.test(h.name || '')) : null; }
+function renderJobNote(){
+  const d = new Date(), h = eveningSpan(d) ? jobHabit() : null, es = h && habitsGet('entries');
+  const logged = h && es && Array.isArray(es.entries) && es.entries.some(e => e && e.habitId === h.id && e.day === ymd(d));
+  const show = !!h && !logged, box = $('jobNote'); box.hidden = !show;
+  if (!show) return;
+  box.textContent = h.name + ' not logged today: ' + sched().jobMin + ' min, shortlist one sponsorable role. ';
+  const a = el('a', null, 'Habits →'); a.href = '/habits/'; box.append(a);
 }
 // same rule as Habits' targetFor: a changed weekly target starts the next Monday
 const targetForHabit = (h, monday) => { let t = null; for (const x of Array.isArray(h.targets) ? h.targets : []) if (x && x.from <= monday) t = x.target; return t == null ? (Array.isArray(h.targets) && h.targets.length ? h.targets[0].target : h.target) || 1 : t; };
@@ -1103,13 +1173,22 @@ function renderEvening(){
   if (!on){ if (T.lenOnce){ T.lenOnce = null; saveTimer(); } return; }
   const today = ymd(new Date());
   if (T.eveningDay !== today){ // once per evening: preselect and shorten, then leave the choices to you
-    T.eveningDay = today; T.lenOnce = 15;
+    T.eveningDay = today; T.lenOnce = sched().studyMin;
     if (!T.subject){ const b = behindSubject(); if (b) T.subject = b.id; }
     saveTimer();
   }
+  const S = sched();
+  $('eveningText').textContent = 'Morning missed. Evening minimum: job search (' + S.jobMin + ' min), then one ' + S.studyMin + '-min block. Finish by ' + niceTime(S.wind) + '.';
   const sub = subjectById(T.subject), txt = !T.subject ? null : isBuild(T.subject) ? nextTaskText() || EVENING_MIN.build : EVENING_MIN[T.subject];
   $('eveningMin').textContent = txt ? sub.label + ' minimum: ' + txt : 'Pick a subject below for its minimum.';
 }
+// both hide the card for the rest of today
+$('eveFull').onclick = () => { T.eveningHidden = ymd(new Date()); T.lenOnce = null; saveTimer(); renderTimer(); };
+$('eveNo').onclick = () => {
+  T.eveningHidden = ymd(new Date()); T.lenOnce = null; saveTimer();
+  const sid = T.subject || (behindSubject() || {}).id, hid = sid && subjectHabit(sid);
+  location.href = '/habits/' + (hid ? '#reserve=' + encodeURIComponent(hid) + '&reason=' + encodeURIComponent('Evening plans') : '');
+};
 
 function renderSubjects(){
   const list = activeSubjects(), box = $('subjects'); box.textContent = '';
@@ -1117,11 +1196,12 @@ function renderSubjects(){
   $('subjectRow').hidden = !list.length; // no subjects yet: no row (add them in Settings)
   list.forEach(s => {
     const b = el('button', 'tag', s.label); b.type = 'button'; b.setAttribute('aria-pressed', T.subject === s.id ? 'true' : 'false');
-    b.onclick = () => { T.subject = T.subject === s.id ? null : s.id; saveTimer(); renderSubjects(); renderEvening(); };
+    b.onclick = () => { T.subject = T.subject === s.id ? null : s.id; saveTimer(); renderSubjects(); renderEvening(); renderShortMorning(); };
     box.appendChild(b);
   });
   // only mention Habits when a subject actually logs to one
   $('subjectWhy').hidden = !list.some(s => subjectHabit(s.id));
+  $('subjFull').textContent = sched().fullMin; $('subjMin').textContent = sched().minMin;
   renderNextTask();
 }
 /* Settings → Subjects: add, remove (archive), and put back */
@@ -1326,13 +1406,15 @@ function renderSetup(){
 /* ---------- settings ---------- */
 function fillSettings(){
   $('sFocus').value = settings.focusMin; $('sBreak').value = settings.breakMin; $('sLong').value = settings.longBreakMin; $('sSound').checked = !!settings.sound; $('sVol').value = settings.volume || 'normal';
-  const sl = habitsSleep();
-  $('sWind').value = sl ? hhmm(sl.wind) : settings.windDown || DEFAULTS.windDown; $('sWind').disabled = !!sl;
-  $('sWindNote').hidden = !sl; if (sl) $('sWindNote').textContent = "Follows Habits' bedtime target (" + shortTime(hhmm(sl.bed)) + ') minus 45 min.';
-  $('sFirst').value = settings.firstBlock || DEFAULTS.firstBlock;
+  const S = sched();
+  $('schedNote').textContent = 'Wind-down ' + niceTime(S.wind) + ', first block ' + niceTime(S.wake) + ', Full at ' + S.fullMin + ' min, Minimum at ' + S.minMin + ' min. Change these in Habits → Settings → Schedule.';
 }
-$('sWind').onchange = () => { settings.windDown = $('sWind').value || DEFAULTS.windDown; saveSettings(); fillSettings(); renderTimer(); };
-$('sFirst').onchange = () => { settings.firstBlock = $('sFirst').value || DEFAULTS.firstBlock; saveSettings(); fillSettings(); renderTimer(); };
+// Habits changed (Schedule, habits or entries in another tab): read the Schedule again and redraw
+window.addEventListener('storage', ev => {
+  if (!ev.key || !ev.key.startsWith('habits:')) return;
+  schedAt = -1e9; fillSettings();
+  if ((T.phase || 'idle') === 'idle') renderTimer();
+});
 const clamp = (v, lo, hi, d) => { v = parseInt(v, 10); return isNaN(v) ? d : Math.min(hi, Math.max(lo, v)); };
 $('sFocus').onchange = () => { settings.focusMin = clamp($('sFocus').value, 5, 120, 25); saveSettings(); fillSettings(); renderTimer(); };
 $('sBreak').onchange = () => { settings.breakMin = clamp($('sBreak').value, 1, 30, 5); saveSettings(); fillSettings(); };
